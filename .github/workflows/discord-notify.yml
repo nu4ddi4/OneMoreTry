@@ -83,7 +83,7 @@ jobs:
             [ -z "$URL" ] && URL="$HEAD_URL"
             FIELDS=$(printf '{"name":"브랜치","value":"`%s`","inline":true}' "$REF")
             FIELDS="${FIELDS},$(printf '{"name":"푸시한 사람","value":"%s","inline":true}' "$ACTOR")"
-            FIELDS="${FIELDS},$(printf '{"name":"SHA","value":"[\`%s\`](%s)","inline":false}' "$SHA" "$URL")"
+            FIELDS="${FIELDS},$(printf '{"name":"SHA","value":"[\\`%s\\`](%s)","inline":false}' "$SHA" "$URL")"
             FOOTER="${FOOTER} • push"
 
           elif [ "$EVENT" = "pull_request" ]; then
@@ -91,17 +91,17 @@ jobs:
             if [ "$MERGED" = "true" ]; then
               COLOR=15844367  # gold
               TITLE="[${REPO}] ✅ PR Merged #${PR_NUM}"
-              DESC="**${TITLE}**\n${TITLE}\n\n$ACTOR 님이 PR을 머지했습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              DESC="**${TITLE}**\n\n$ACTOR 님이 PR을 머지했습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
               FOOTER="${FOOTER} • merged"
             elif [ "$ACTION" = "opened" ] || [ "$ACTION" = "reopened" ]; then
               COLOR=3447003  # blue
               TITLE="[${REPO}] 🔀 PR Opened #${PR_NUM}"
-              DESC="**${TITLE}**\n$ACTOR 님이 PR을 열었습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              DESC="**${TITLE}**\n\n$ACTOR 님이 PR을 열었습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
               FOOTER="${FOOTER} • pull_request"
             elif [ "$ACTION" = "closed" ]; then
               COLOR=10038562  # grayish
               TITLE="[${REPO}] ❌ PR Closed #${PR_NUM}"
-              DESC="**${TITLE}**\n$ACTOR 님이 PR을 닫았습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              DESC="**${TITLE}**\n\n$ACTOR 님이 PR을 닫았습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
               FOOTER="${FOOTER} • pull_request"
             else
               COLOR=3447003
