@@ -10,22 +10,29 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Build Discord payload
+      - uses: actions/checkout@v4
+      - name: Install jq
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq >/dev/null 2>&1 || true
+      - name: Build rich Discord payload
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
           ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
           REF: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
-          URL: ${{ github.event.head_commit.url }}
+          HEAD_URL: ${{ github.event.head_commit.url }}
           TITLE: ${{ github.event.pull_request.title }}
           PR_NUM: ${{ github.event.pull_request.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUM: ${{ github.event.issue.number }}
           ACTION: ${{ github.event.action }}
-          COMMITS: ${{ toJson(github.event.commits) }}
+          COMMITS_JSON: ${{ toJson(github.event.commits) }}
           COMPARE: ${{ github.event.compare }}
+          REPO_URL: ${{ github.event.repository.html_url }}
+          REPO_DESC: ${{ github.event.repository.description }}
+          REPO_LANG: ${{ github.event.repository.language }}
         run: |
           set -e
           WEBHOOK="$WEBHOOK"
@@ -33,40 +40,122 @@ jobs:
             echo "DISCORD_WEBHOOK_URL not set. Skipping."
             exit 0
           fi
-          PAYLOAD=""
-          COLOR=0
-          if [ "$EVENT" = "push" ]; then
-            COMMIT_COUNT=$(echo "$COMMITS" | jq -r 'length' 2>/dev/null || echo 0)
-            if [ "$COMMIT_COUNT" -gt 0 ]; then
-              MSG=""
-              for i in $(seq 0 $((COMMIT_COUNT>3?2:COMMIT_COUNT-1))); do
-                C_MSG=$(echo "$COMMITS" | jq -r ".[$i].message" 2>/dev/null | head -n1)
-                C_AUTHOR=$(echo "$COMMITS" | jq -r ".[$i].author.name" 2>/dev/null)
-                C_SHA=$(echo "$COMMITS" | jq -r ".[$i].id" 2>/dev/null | cut -c1-7)
-                if [ -n "$MSG" ]; then MSG="$MSG\\n"; fi
-                MSG="$MSG• $C_AUTHOR: $C_MSG ($C_SHA)"
-              done
-              MSG="$MSG\\n💾 총 ${COMMIT_COUNT}개 커밋"
-            else
-              MSG="(empty push)"
+
+          # Extract commits info
+          COMMIT_COUNT=$(echo "$COMMITS_JSON" | jq -r 'length' 2>/dev/null || echo 0)
+          COMMITS_DETAIL=""
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
+            MAX_SHOW=3
+            for i in $(seq 0 $((COMMIT_COUNT-1))); do
+              [ $i -ge $MAX_SHOW ] && break
+              C_MSG=$(echo "$COMMITS_JSON" | jq -r ".[$i].message" 2>/dev/null | head -n1)
+              C_AUTHOR=*** "$COMMITS_JSON" | jq -r ".[$i].author.name" 2>/dev/null)
+              C_SHA=$(echo "$COMMITS_JSON" | jq -r ".[$i].id" 2>/dev/null | cut -c1-7)
+              C_URL=$(echo "$COMMITS_JSON" | jq -r ".[$i].url" 2>/dev/null)
+              if [ -z "$C_URL" ] || [ "$C_URL" = "null" ]; then
+                C_URL="https://github.com/$REPO/commit/$(echo "$COMMITS_JSON" | jq -r ".[$i].id" 2>/dev/null)"
+              fi
+              COMMITS_DETAIL="${COMMITS_DETAIL}[`${C_SHA}`](${C_URL}) ${C_AUTHOR}: ${C_MSG}\n"
+            done
+            if [ "$COMMIT_COUNT" -gt $MAX_SHOW ]; then
+              COMMITS_DETAIL="${COMMITS_DETAIL}\n... 외 ${COMMIT_COUNT}개 커밋\n"
             fi
-            COMPARE_URL="${COMPARE:-$URL}"
-            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s\\n%s","color":3066993}]}' "$REPO" "$EVENT" "$COMPARE_URL" "$MSG" "$SHA")
+          fi
+
+          # Footer / timestamp
+          FOOTER="GitHub • ${REPO}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Payload
+          COLOR=0
+          URL="$COMPARE"
+          TITLE=""
+          DESC=""
+          FIELDS=""
+
+          if [ "$EVENT" = "push" ]; then
+            COLOR=3066993  # green
+            TITLE="[${REPO}] 🚀 Push → ${REF}"
+            DESC="${COMMITS_DETAIL}"
+            if [ "$COMMIT_COUNT" -gt 0 ]; then
+              DESC="${DESC}\n📊 총 **${COMMIT_COUNT}개** 커밋"
+            fi
+            [ -z "$URL" ] && URL="$HEAD_URL"
+            FIELDS=$(printf '{"name":"브랜치","value":"`%s`","inline":true}' "$REF")
+            FIELDS="${FIELDS},$(printf '{"name":"푸시한 사람","value":"%s","inline":true}' "$ACTOR")"
+            FIELDS="${FIELDS},$(printf '{"name":"SHA","value":"[\`%s\`](%s)","inline":false}' "$SHA" "$URL")"
+            FOOTER="${FOOTER} • push"
+
           elif [ "$EVENT" = "pull_request" ]; then
             MERGED="${{ github.event.pull_request.merged }}"
-            COLOR=3447003
-            [ "$MERGED" = "true" ] && COLOR=15844367
-            VERB="$ACTION"
-            if [ "$MERGED" = "true" ]; then VERB="merged"; fi
-            URL2="https://github.com/$REPO/pull/$PR_NUM"
-            MSG="$ACTOR: $VERB PR #$PR_NUM on $REF"
-            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":%d}]}' "$REPO" "$EVENT" "$URL2" "$MSG" "$COLOR")
+            if [ "$MERGED" = "true" ]; then
+              COLOR=15844367  # gold
+              TITLE="[${REPO}] ✅ PR Merged #${PR_NUM}"
+              DESC="**${TITLE}**\n${TITLE}\n\n$ACTOR 님이 PR을 머지했습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              FOOTER="${FOOTER} • merged"
+            elif [ "$ACTION" = "opened" ] || [ "$ACTION" = "reopened" ]; then
+              COLOR=3447003  # blue
+              TITLE="[${REPO}] 🔀 PR Opened #${PR_NUM}"
+              DESC="**${TITLE}**\n$ACTOR 님이 PR을 열었습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              FOOTER="${FOOTER} • pull_request"
+            elif [ "$ACTION" = "closed" ]; then
+              COLOR=10038562  # grayish
+              TITLE="[${REPO}] ❌ PR Closed #${PR_NUM}"
+              DESC="**${TITLE}**\n$ACTOR 님이 PR을 닫았습니다.\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              FOOTER="${FOOTER} • pull_request"
+            else
+              COLOR=3447003
+              TITLE="[${REPO}] 🔀 PR #${PR_NUM} ${ACTION}"
+              DESC="$ACTION\n\n**제목:** ${TITLE}\n**헤드 브랜치:** ${REF}"
+              FOOTER="${FOOTER} • pull_request"
+            fi
+            URL="https://github.com/${REPO}/pull/${PR_NUM}"
+            FIELDS=$(printf '{"name":"PR 번호","value":"[#%s](%s)","inline":true}' "$PR_NUM" "$URL")
+            FIELDS="${FIELDS},$(printf '{"name":"작성자","value":"%s","inline":true}' "$ACTOR")"
+            FIELDS="${FIELDS},$(printf '{"name":"헤드 브랜치","value":"`%s`","inline":true}' "$REF")"
+
           elif [ "$EVENT" = "issues" ]; then
-            URL2="https://github.com/$REPO/issues/$ISSUE_NUM"
-            MSG="$ACTOR $ACTION issue: $ISSUE_TITLE (#$ISSUE_NUM)"
-            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":10038562}]}' "$REPO" "$EVENT" "$URL2" "$MSG")
+            COLOR=10038562  # orange
+            if [ "$ACTION" = "opened" ] || [ "$ACTION" = "reopened" ]; then
+              TITLE="[${REPO}] 🎫 Issue Opened #${ISSUE_NUM}"
+            elif [ "$ACTION" = "closed" ]; then
+              TITLE="[${REPO}] 🔒 Issue Closed #${ISSUE_NUM}"
+            else
+              TITLE="[${REPO}] 🎫 Issue #${ISSUE_NUM} ${ACTION}"
+            fi
+            DESC="$ACTOR ${ACTION} issue: **${ISSUE_TITLE}**\n\n이슈 번호: #${ISSUE_NUM}"
+            URL="https://github.com/${REPO}/issues/${ISSUE_NUM}"
+            FIELDS=$(printf '{"name":"이슈 번호","value":"[#%s](%s)","inline":true}' "$ISSUE_NUM" "$URL")
+            FIELDS="${FIELDS},$(printf '{"name":"작성자","value":"%s","inline":true}' "$ACTOR")"
+            FIELDS="${FIELDS},$(printf '{"name":"상태","value":"%s","inline":true}' "$ACTION")"
+            FOOTER="${FOOTER} • issues"
+
+          else
+            TITLE="[${REPO}] 📢 Event: ${EVENT}"
+            DESC="$ACTOR triggered ${EVENT}"
+            FOOTER="${FOOTER} • ${EVENT}"
           fi
-          if [ -n "$PAYLOAD" ]; then
-            echo "$PAYLOAD"
-            curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
-          fi
+
+          # Build JSON payload using jq for safety
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg url "$URL" \
+            --arg desc "$DESC" \
+            --argjson color "$COLOR" \
+            --arg footer "$FOOTER" \
+            --arg ts "$TIMESTAMP" \
+            --argjson fields "$(echo "[$FIELDS]" | jq '.')" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                description: $desc,
+                color: $color,
+                fields: $fields,
+                footer: { text: $footer },
+                timestamp: $ts
+              }]
+            }'
+          )
+          echo "$PAYLOAD"
+          curl -s -X POST "$WEBHOOK" -H 'Content-Type: application/json' -d "$PAYLOAD"
