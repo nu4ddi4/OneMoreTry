@@ -49,7 +49,7 @@ jobs:
             for i in $(seq 0 $((COMMIT_COUNT-1))); do
               [ $i -ge $MAX_SHOW ] && break
               C_MSG=$(echo "$COMMITS_JSON" | jq -r ".[$i].message" 2>/dev/null | head -n1)
-              C_AUTHOR=*** "$COMMITS_JSON" | jq -r ".[$i].author.name" 2>/dev/null)
+              C_AUTHOR=$(echo "$COMMITS_JSON" | jq -r ".[$i].author.name" 2>/dev/null)
               C_SHA=$(echo "$COMMITS_JSON" | jq -r ".[$i].id" 2>/dev/null | cut -c1-7)
               C_URL=$(echo "$COMMITS_JSON" | jq -r ".[$i].url" 2>/dev/null)
               if [ -z "$C_URL" ] || [ "$C_URL" = "null" ]; then
