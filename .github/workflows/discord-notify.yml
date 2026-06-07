@@ -10,9 +10,9 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send to Discord
+      - name: Build Discord payload
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
           EVENT: ${{ github.event_name }}
           ACTOR: ${{ github.actor }}
@@ -24,32 +24,49 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUM: ${{ github.event.issue.number }}
           ACTION: ${{ github.event.action }}
+          COMMITS: ${{ toJson(github.event.commits) }}
+          COMPARE: ${{ github.event.compare }}
         run: |
           set -e
-          WEBHOOK="$WEBHOOK_URL"
+          WEBHOOK="$WEBHOOK"
           if [ -z "$WEBHOOK" ] || [ "$WEBHOOK" = "null" ]; then
             echo "DISCORD_WEBHOOK_URL not set. Skipping."
             exit 0
           fi
-          PAYLOAD=''
+          PAYLOAD=""
+          COLOR=0
           if [ "$EVENT" = "push" ]; then
-            MSG="$ACTOR pushed to $REF ${SHA:0:7}"
-            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":3066993}]}' "$REPO" "$EVENT" "$URL" "$MSG")
+            COMMIT_COUNT=$(echo "$COMMITS" | jq -r 'length' 2>/dev/null || echo 0)
+            if [ "$COMMIT_COUNT" -gt 0 ]; then
+              MSG=""
+              for i in $(seq 0 $((COMMIT_COUNT>3?2:COMMIT_COUNT-1))); do
+                C_MSG=$(echo "$COMMITS" | jq -r ".[$i].message" 2>/dev/null | head -n1)
+                C_AUTHOR=$(echo "$COMMITS" | jq -r ".[$i].author.name" 2>/dev/null)
+                C_SHA=$(echo "$COMMITS" | jq -r ".[$i].id" 2>/dev/null | cut -c1-7)
+                if [ -n "$MSG" ]; then MSG="$MSG\\n"; fi
+                MSG="$MSG• $C_AUTHOR: $C_MSG ($C_SHA)"
+              done
+              MSG="$MSG\\n💾 총 ${COMMIT_COUNT}개 커밋"
+            else
+              MSG="(empty push)"
+            fi
+            COMPARE_URL="${COMPARE:-$URL}"
+            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s\\n%s","color":3066993}]}' "$REPO" "$EVENT" "$COMPARE_URL" "$MSG" "$SHA")
           elif [ "$EVENT" = "pull_request" ]; then
             MERGED="${{ github.event.pull_request.merged }}"
             COLOR=3447003
             [ "$MERGED" = "true" ] && COLOR=15844367
             VERB="$ACTION"
             if [ "$MERGED" = "true" ]; then VERB="merged"; fi
-            MSG="$ACTOR: $VERB PR #$PR_NUM on $REF"
             URL2="https://github.com/$REPO/pull/$PR_NUM"
+            MSG="$ACTOR: $VERB PR #$PR_NUM on $REF"
             PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":%d}]}' "$REPO" "$EVENT" "$URL2" "$MSG" "$COLOR")
           elif [ "$EVENT" = "issues" ]; then
-            MSG="$ACTOR $ACTION issue: $ISSUE_TITLE (#$ISSUE_NUM)"
             URL2="https://github.com/$REPO/issues/$ISSUE_NUM"
+            MSG="$ACTOR $ACTION issue: $ISSUE_TITLE (#$ISSUE_NUM)"
             PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":10038562}]}' "$REPO" "$EVENT" "$URL2" "$MSG")
-          else
-            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","description":"%s","color":10038562}]}' "$REPO" "$EVENT" "$ACTOR")
           fi
-          echo "$PAYLOAD"
-          curl -s -X POST "$WEBHOOK" -H 'Content-Type: application/json' -d "$PAYLOAD"
+          if [ -n "$PAYLOAD" ]; then
+            echo "$PAYLOAD"
+            curl -s -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD"
+          fi
