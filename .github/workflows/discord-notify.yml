@@ -1,0 +1,55 @@
+name: Discord Notify
+on:
+  push:
+  pull_request:
+    types: [opened, reopened, closed, merged]
+  issues:
+    types: [opened, reopened, closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          URL: ${{ github.event.head_commit.url }}
+          TITLE: ${{ github.event.pull_request.title }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          set -e
+          WEBHOOK="$WEBHOOK_URL"
+          if [ -z "$WEBHOOK" ] || [ "$WEBHOOK" = "null" ]; then
+            echo "DISCORD_WEBHOOK_URL not set. Skipping."
+            exit 0
+          fi
+          PAYLOAD=''
+          if [ "$EVENT" = "push" ]; then
+            MSG="$ACTOR pushed to $REF ${SHA:0:7}"
+            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":3066993}]}' "$REPO" "$EVENT" "$URL" "$MSG")
+          elif [ "$EVENT" = "pull_request" ]; then
+            MERGED="${{ github.event.pull_request.merged }}"
+            COLOR=3447003
+            [ "$MERGED" = "true" ] && COLOR=15844367
+            VERB="$ACTION"
+            if [ "$MERGED" = "true" ]; then VERB="merged"; fi
+            MSG="$ACTOR: $VERB PR #$PR_NUM on $REF"
+            URL2="https://github.com/$REPO/pull/$PR_NUM"
+            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":%d}]}' "$REPO" "$EVENT" "$URL2" "$MSG" "$COLOR")
+          elif [ "$EVENT" = "issues" ]; then
+            MSG="$ACTOR $ACTION issue: $ISSUE_TITLE (#$ISSUE_NUM)"
+            URL2="https://github.com/$REPO/issues/$ISSUE_NUM"
+            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","url":"%s","description":"%s","color":10038562}]}' "$REPO" "$EVENT" "$URL2" "$MSG")
+          else
+            PAYLOAD=$(printf '{"embeds":[{"title":"[%s] %s","description":"%s","color":10038562}]}' "$REPO" "$EVENT" "$ACTOR")
+          fi
+          echo "$PAYLOAD"
+          curl -s -X POST "$WEBHOOK" -H 'Content-Type: application/json' -d "$PAYLOAD"
