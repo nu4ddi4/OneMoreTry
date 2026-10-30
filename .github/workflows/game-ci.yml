@@ -11,12 +11,16 @@ on:
         description: 'Optional stable release tag (for example v0.2.0); main only'
         required: false
         type: string
+      verified_run_id:
+        description: 'Recovery only: successful Godot Windows run with identical shipped game inputs; reuse its Windows-tested artifacts'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: game-${{ github.workflow }}-${{ github.ref }}
+  group: game-${{ github.workflow }}-${{ github.ref }}-${{ inputs.verified_run_id || 'build' }}
   cancel-in-progress: true
 
 jobs:
@@ -42,6 +46,7 @@ jobs:
 
   build:
     name: Test & export Windows
+    if: github.event_name != 'workflow_dispatch' || inputs.verified_run_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -122,15 +127,20 @@ jobs:
 
   publish:
     name: Publish Windows release
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
-    needs: windows-smoke
+    if: always() && needs.branch-policy.result == 'success' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')) && ((needs.build.result == 'success' && needs.windows-smoke.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.verified_run_id != ''))
+    needs: [branch-policy, build, windows-smoke]
     runs-on: ubuntu-latest
+    concurrency:
+      group: windows-release-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: write
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       REQUESTED_TAG: ${{ inputs.release_tag }}
+      VERIFIED_RUN_ID: ${{ inputs.verified_run_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate release request
@@ -142,6 +152,22 @@ jobs:
           [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected vMAJOR.MINOR.PATCH'; exit 1; }
           [[ "$release_tag" == "v$version" ]] || { echo 'Tag must match project version'; exit 1; }
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          if [[ -n "$VERIFIED_RUN_ID" ]]; then
+            [[ "$VERIFIED_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Expected a numeric verified run ID'; exit 1; }
+            gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID" > /tmp/verified-run.json
+            # A recovery commit may change publishing automation only. Require the
+            # verified commit to be an ancestor and the shipped game inputs identical.
+            verified_sha=$(jq -r .head_sha /tmp/verified-run.json)
+            jq -e '.name == "Godot Windows" and .path == ".github/workflows/game-ci.yml" and .status == "completed" and .conclusion == "success"' /tmp/verified-run.json
+            git fetch origin "$verified_sha" --depth=1
+            git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
+            gh api "repos/$GH_REPO/compare/$verified_sha...$GITHUB_SHA" --jq .status | grep -Ex 'ahead|identical'
+            gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID/jobs?per_page=100" > /tmp/verified-jobs.json
+            jq -e '[.jobs[] | select((.name == "Test & export Windows" or .name == "Windows launch") and .conclusion == "success")] | length == 2' /tmp/verified-jobs.json
+            echo "ARTIFACT_RUN_ID=$VERIFIED_RUN_ID" >> "$GITHUB_ENV"
+          else
+            echo "ARTIFACT_RUN_ID=$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+          fi
           # A missing release is distinct from an authentication or server failure.
           gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/releases.json
           if jq -e --arg tag "$release_tag" '.[] | select(.tag_name == $tag and .draft == false)' /tmp/releases.json >/dev/null; then
@@ -155,11 +181,15 @@ jobs:
         with:
           name: OneMoreTry-Windows-x64
           path: package
+          run-id: ${{ env.ARTIFACT_RUN_ID }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         if: steps.release.outputs.publish == 'true'
         with:
           name: OneMoreTry-Windows-installer
           path: release
+          run-id: ${{ env.ARTIFACT_RUN_ID }}
+          github-token: ${{ github.token }}
       - name: Package the Windows-tested executable
         if: steps.release.outputs.publish == 'true'
         working-directory: package
@@ -178,6 +208,7 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" release/* --clobber
           # The updater requires GitHub's asset digest; never publish an unusable feed.
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > /tmp/uploaded-release.json
+          release_api=$(gh release view "$RELEASE_TAG" --json apiUrl --jq .apiUrl)
+          gh api "$release_api" > /tmp/uploaded-release.json
           jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
           gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
