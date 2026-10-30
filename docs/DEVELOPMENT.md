@@ -19,7 +19,7 @@ git push -u origin feature/stage-02
 
 기능 PR을 `beta`에 병합하고, 통합 검증을 마치면 `beta → main` 배포 PR을 병합합니다. 이력을 보존하는 merge commit을 사용합니다. 배포 후 `main`을 `beta`에 fast-forward로 동기화해 다음 배포 PR에 과거 병합 커밋이 쌓이지 않게 합니다. 이 동기화는 PR이 아닌 브랜치 이동이므로 보호 규칙에서 막히는 경우 `chore/sync-main`을 `main`에서 분기해 `beta`에 PR을 올립니다. 강제 push는 사용하지 않습니다.
 
-`Godot Windows` 워크플로가 PR의 방향을 검사하고, 자동 회귀 검사·전체 스테이지 통과·Windows 내보내기·Windows 네이티브 실행을 검증합니다. 실제 GitHub 보호 설정 여부는 `docs/VALIDATION.md`에 기록합니다.
+`Godot Windows` 워크플로가 PR의 방향을 검사하고, 자동 회귀 검사·전체 스테이지 통과·Windows 내보내기·Windows 네이티브 실행을 검증합니다. 서버 측 강제 보호는 연결 앱의 관리 권한 부족(HTTP 403)으로 미적용 상태입니다. 현재 운영 규칙을 따라 PR로 병합하며, 관리 권한이 있는 CLI에서 `python3 tools/configure_branch_protection.py`를 실행하면 필수 검사와 직접 push 제한을 적용할 수 있습니다. 자세한 결과는 `docs/VALIDATION.md`에 기록합니다.
 
 ## 실행 및 검사
 
