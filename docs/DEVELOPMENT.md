@@ -58,6 +58,8 @@ Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WI
 
 `project.godot`의 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올리고 `feature/* → beta → main` PR을 병합합니다. `main` push에서 자동 회귀·업데이트 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 **동일한** EXE 및 설치 파일을 정식 릴리스로 게시합니다. 설치형 EXE와 포터블 ZIP 각각에 SHA-256 파일을 제공합니다. 이미 게시한 버전은 건드리지 않습니다. 실패한 배포는 `main`의 `Godot Windows` 수동 실행에서 `release_tag=v0.2.0`처럼 프로젝트 버전을 지정해 재시도할 수 있습니다. `beta`에서는 릴리스를 게시하지 않습니다.
 
+Windows runner가 멈춘 경우 수동 배포의 `verified_run_id`에 이전에 성공한 `Godot Windows` 실행 번호를 지정해 검증한 artifact를 재사용할 수 있습니다. 성공 상태와 Windows 검사, 현재 main의 조상 커밋 여부, 게임·리소스·설치 및 배포 안내 파일이 동일한지 확인한 후에만 게시합니다. 배포 자동화 복구만 변경한 커밋도 이 경로를 사용할 수 있으며 게임 입력이 달라지면 거부합니다. 로컬 업로드 토큰을 앱에 넣지 않습니다.
+
 업데이트 공급자는 공개 저장소 `nu4ddi4/side-scroller-game`의 `/releases/latest`입니다. `scripts/updater.gd`는 Windows 배포본 시작 시 한 번 확인하며, 편집기와 `--test`에서는 자동 네트워크 요청을 하지 않습니다. 정식 SemVer 태그와 정확한 설치 파일명·크기·GitHub asset digest를 확인한 뒤 사용자 요청 시 `.part`로 내려받습니다. SHA-256과 크기가 맞으면 `.exe`로 바꾸고, 별도 설치 확인 후 다시 검증해 직접 프로세스로 실행합니다. 셸이나 저장소 인증 토큰을 사용하지 않습니다. 403·오프라인·타임아웃·손상 파일은 재시도 가능한 상태로 처리하며 취소 시 부분 파일을 지웁니다. 게임 기록을 저장한 후 게임이 종료되고 설치 UI가 진행됩니다. 다운로드 파일은 사용자 데이터의 `updates` 폴더에 남습니다.
 
 `tools/test_updater.py`는 로컬 HTTP 서버로 버전 비교, 메타데이터, 정상·변조·불완전·과대 다운로드와 취소를 실제 Godot HTTPRequest로 검증합니다. `tools/test_installer.ps1`는 한글·공백 경로에 설치·재설치하고 실제 EXE를 실행한 뒤 제거하며, 각 단계에서 사용자 기록을 확인합니다. 기존 v0.1.0 사용자는 새 설치 파일을 한 번 수동 실행해야 합니다. ZIP 사용자가 업데이트 설치를 선택하면 설치형이 되며 이후에는 시작 메뉴의 설치본을 실행합니다.
