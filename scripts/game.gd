@@ -37,7 +37,7 @@ var time_label: Label
 var checkpoint_label: Label
 var toast_label: Label
 var toast_clock := 0.0
-var progress: ProgressBar
+var progress: ColorRect
 var new_best := false
 var test_mode := false
 
@@ -336,13 +336,17 @@ func build_ui() -> void:
 	checkpoint_label = text(hud, "", Vector2(330, 34), Vector2(230, 30), 14, MUTED)
 	death_label = text(hud, "", Vector2(595, 30), Vector2(145, 35), 19)
 	time_label = text(hud, "", Vector2(762, 30), Vector2(150, 35), 19, MINT)
-	progress = ProgressBar.new()
-	progress.position = Vector2(21, 78)
-	progress.show_percentage = false
-	progress.add_theme_stylebox_override("background", style(Color("395850")))
-	progress.add_theme_stylebox_override("fill", style(MINT))
-	progress.size = Vector2(918, 3)
-	hud.add_child(progress)
+	var track := ColorRect.new()
+	track.position = Vector2(21, 78)
+	track.size = Vector2(918, 3)
+	track.color = Color("395850")
+	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(track)
+	progress = ColorRect.new()
+	progress.size = Vector2(0, 3)
+	progress.color = MINT
+	progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	track.add_child(progress)
 	panel(hud, Vector2(20, 490), Vector2(920, 31), Color("203c40e8"))
 	text(hud, "A / D  이동     SPACE  점프     R  재도전", Vector2(34, 495), Vector2(550, 20), 11, MUTED)
 	text(hud, "ESC  일시정지     M  음소거     F11  전체 화면", Vector2(598, 495), Vector2(330, 20), 11, MUTED)
@@ -364,7 +368,7 @@ func update_hud() -> void:
 	death_label.text = "실패  %03d" % run_deaths
 	time_label.text = format_time(elapsed)
 	checkpoint_label.text = "CHECKPOINT  %d / 2" % (checkpoint_index + 1)
-	progress.value = clampf((player.position.x - 100) / (TryWorld.GOAL - 100) * 100, 0, 100)
+	progress.size.x = clampf((player.position.x - 100) / (TryWorld.GOAL - 100), 0, 1) * 918
 
 static func format_time(seconds: float) -> String:
 	var centis := int(seconds * 100)
