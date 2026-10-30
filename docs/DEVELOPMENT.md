@@ -44,6 +44,8 @@ godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
 
 리소스는 실행 파일에 포함됩니다. 배포 시 실행 안내와 폰트·Godot 라이선스를 함께 전달합니다. GitHub Actions의 `OneMoreTry-Windows-x64` artifact가 이 구성을 자동 생성합니다.
 
+릴리스는 `main`에서 `Godot Windows` 워크플로를 수동 실행하며 `release_tag`에 프로젝트 버전과 같은 태그(예: `v0.1.0`)를 지정합니다. 자동 검사와 Windows 실행을 모두 통과한 같은 EXE를 ZIP으로 묶어 SHA-256과 함께 prerelease로 게시합니다. 이미 게시한 릴리스는 덮어쓰지 않습니다. 로컬 CLI의 릴리스 업로드 인증이 제한되는 경우에도 runner의 저장소 전용 토큰으로 배포할 수 있습니다.
+
 ## 구조와 확장
 
 `scripts/player.gd`: 이동, 100ms 코요테 타임, 120ms 점프 버퍼, 가변 점프. 물리 120Hz.
