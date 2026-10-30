@@ -7,7 +7,7 @@ config/description="쉬운 조작, 악랄한 함정, 빠른 재도전. ONE MORE 
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://assets/icon.svg"
-config/version="0.1.0"
+config/version="0.2.0"
 
 [display]
 window/size/viewport_width=960

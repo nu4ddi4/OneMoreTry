@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional prerelease tag (for example v0.1.0); main only'
+        description: 'Optional stable release tag (for example v0.2.0); main only'
         required: false
         type: string
 
@@ -59,6 +59,8 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
       - name: Full stage traversal with normal inputs
         run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
+      - name: Update metadata, real HTTP download, verification and cancellation
+        run: python3 tools/test_updater.py
       - name: Export Windows x64
         run: |
           mkdir -p build/windows
@@ -78,30 +80,49 @@ jobs:
     name: Windows launch
     needs: build
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: OneMoreTry-Windows-x64
-          path: game
+          path: build/windows
+      - name: Build per-user Windows installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path project.godot -Pattern '^config/version="([^"]+)"').Matches.Groups[1].Value
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $compiler)) { throw 'Inno Setup 6 is required on this runner' }
+          & $compiler "/DAppVersion=$version" installer/OneMoreTry.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Install, reinstall, launch and uninstall with saved-record preservation
+        shell: pwsh
+        run: ./tools/test_installer.ps1
       - name: Launch the exported exe on native Windows
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath ./game/OneMoreTry.exe -ArgumentList '--headless','--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput native-stdout.log -RedirectStandardError native-stderr.log
+          $process = Start-Process -FilePath ./build/windows/OneMoreTry.exe -ArgumentList '--headless','--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput native-stdout.log -RedirectStandardError native-stderr.log
           Get-Content native-stdout.log
           Get-Content native-stderr.log
           if ($process.ExitCode -ne 0) { throw "Game exited with $($process.ExitCode)" }
           $errors = Select-String -Path native-stdout.log,native-stderr.log -Pattern 'SCRIPT ERROR|ERROR:'
           if ($errors) { throw "Godot reported runtime errors: $errors" }
       - uses: actions/upload-artifact@v4
+        with:
+          name: OneMoreTry-Windows-installer
+          path: build/installer/*-Setup.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Windows-launch-logs
-          path: native-*.log
+          path: |
+            native-*.log
+            installer-*.log
 
   publish:
-    name: Publish Windows prerelease
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    name: Publish Windows release
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
     needs: windows-smoke
     runs-on: ubuntu-latest
     permissions:
@@ -109,34 +130,54 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ inputs.release_tag }}
+      REQUESTED_TAG: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate release request
+        id: release
         run: |
           [[ "$GITHUB_REF" == refs/heads/main ]] || { echo 'Release only from main'; exit 1; }
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected vMAJOR.MINOR.PATCH'; exit 1; }
           version=$(sed -n 's/^config\/version="\([^"]*\)"/\1/p' project.godot)
-          [[ "$RELEASE_TAG" == "v$version" ]] || { echo 'Tag must match project version'; exit 1; }
-          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > /tmp/release-draft; then
-            [[ "$(cat /tmp/release-draft)" == true ]] || { echo 'Refusing to replace an existing published release'; exit 1; }
+          release_tag=${REQUESTED_TAG:-v$version}
+          [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected vMAJOR.MINOR.PATCH'; exit 1; }
+          [[ "$release_tag" == "v$version" ]] || { echo 'Tag must match project version'; exit 1; }
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          # A missing release is distinct from an authentication or server failure.
+          gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/releases.json
+          if jq -e --arg tag "$release_tag" '.[] | select(.tag_name == $tag and .draft == false)' /tmp/releases.json >/dev/null; then
+            echo 'Published version exists; leave it untouched.'
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/download-artifact@v4
+        if: steps.release.outputs.publish == 'true'
         with:
           name: OneMoreTry-Windows-x64
           path: package
+      - uses: actions/download-artifact@v4
+        if: steps.release.outputs.publish == 'true'
+        with:
+          name: OneMoreTry-Windows-installer
+          path: release
       - name: Package the Windows-tested executable
+        if: steps.release.outputs.publish == 'true'
         working-directory: package
         run: |
-          zip -r -9 "../OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" .
-          cd ..
+          zip -r -9 "../release/OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" .
+          cd ../release
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" > "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip.sha256"
-      - name: Upload and publish the prerelease
+          sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" > "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe.sha256"
+      - name: Upload and publish the stable release
+        if: steps.release.outputs.publish == 'true'
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows MVP" --notes-file docs/RELEASE_NOTES.md
+            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows 설치 및 업데이트" --notes-file docs/RELEASE_NOTES.md
           else
-            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows MVP" --notes-file docs/RELEASE_NOTES.md --prerelease --draft
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows 설치 및 업데이트" --notes-file docs/RELEASE_NOTES.md --draft
           fi
-          gh release upload "$RELEASE_TAG" "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip.sha256" --clobber
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease
+          gh release upload "$RELEASE_TAG" release/* --clobber
+          # The updater requires GitHub's asset digest; never publish an unusable feed.
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > /tmp/uploaded-release.json
+          jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
