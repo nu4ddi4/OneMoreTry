@@ -1,0 +1,95 @@
+name: Godot Windows
+
+on:
+  push:
+    branches: [main, beta]
+  pull_request:
+    branches: [main, beta]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-policy:
+    name: Branch policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce feature to beta, beta to main
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [[ "$EVENT" != pull_request ]]; then exit 0; fi
+          if [[ "$BASE" == main && "$HEAD" != beta ]]; then
+            echo 'main accepts pull requests only from beta.'
+            exit 1
+          fi
+          if [[ "$BASE" == beta && ! "$HEAD" =~ ^(feature|fix|chore)/.+ ]]; then
+            echo 'beta accepts feature/*, fix/*, or chore/* branches.'
+            exit 1
+          fi
+
+  build:
+    name: Test & export Windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.6.3
+        run: |
+          curl --fail --location --retry 3 --output /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          chmod +x /tmp/godot/Godot_v4.6.3-stable_linux.x86_64
+          sudo ln -s /tmp/godot/Godot_v4.6.3-stable_linux.x86_64 /usr/local/bin/godot
+          python3 tools/fetch_templates.py
+      - name: Import project
+        run: godot --headless --editor --import --quit
+      - name: Physics and save regression tests
+        run: godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
+      - name: Full stage traversal with normal inputs
+        run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
+      - name: Export Windows x64
+        run: |
+          mkdir -p build/windows
+          godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
+          cp docs/PLAY_WINDOWS.txt build/windows/README.txt
+          mkdir -p build/windows/licenses
+          cp assets/fonts/LICENSE.txt build/windows/licenses/NotoSansCJK.txt
+          cp docs/GODOT_LICENSE.txt build/windows/licenses/Godot.txt
+          cp docs/GODOT_COPYRIGHT.txt build/windows/licenses/Godot-third-party.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OneMoreTry-Windows-x64
+          path: build/windows/
+          retention-days: 30
+
+  windows-smoke:
+    name: Windows launch
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: OneMoreTry-Windows-x64
+          path: game
+      - name: Launch the exported exe on native Windows
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath ./game/OneMoreTry.exe -ArgumentList '--headless','--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput native-stdout.log -RedirectStandardError native-stderr.log
+          Get-Content native-stdout.log
+          Get-Content native-stderr.log
+          if ($process.ExitCode -ne 0) { throw "Game exited with $($process.ExitCode)" }
+          $errors = Select-String -Path native-stdout.log,native-stderr.log -Pattern 'SCRIPT ERROR|ERROR:'
+          if ($errors) { throw "Godot reported runtime errors: $errors" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-launch-logs
+          path: native-*.log
