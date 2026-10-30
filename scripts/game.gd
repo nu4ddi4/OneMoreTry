@@ -6,6 +6,7 @@ const WorldScript = preload("res://scripts/world.gd")
 const TrapScript = preload("res://scripts/trap.gd")
 const RecordsScript = preload("res://scripts/records.gd")
 const SoundScript = preload("res://scripts/sound.gd")
+const UpdaterScript = preload("res://scripts/updater.gd")
 const INK := Color("203c40")
 const CREAM := Color("f4ecd4")
 const MINT := Color("84dfb7")
@@ -40,6 +41,9 @@ var toast_clock := 0.0
 var progress: ColorRect
 var new_best := false
 var test_mode := false
+var updater: TryUpdater
+var update_dialog: AcceptDialog
+var update_button: Button
 
 func _ready() -> void:
 	test_mode = "--test" in OS.get_cmdline_user_args()
@@ -64,11 +68,64 @@ func _ready() -> void:
 	player.died.connect(on_death)
 	player.jumped.connect(func(): sound.effect("jump"))
 	build_ui()
+	build_updater()
 	show_menu()
+	if OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode:
+		updater.check_for_updates()
 	get_window().focus_exited.connect(func():
 		if mode == Mode.PLAYING and not test_mode:
 			pause_game())
 	get_tree().auto_accept_quit = false
+
+func build_updater() -> void:
+	updater = UpdaterScript.new()
+	add_child(updater)
+	update_dialog = AcceptDialog.new()
+	update_dialog.title = "업데이트"
+	update_dialog.dialog_autowrap = true
+	update_dialog.dialog_hide_on_ok = false
+	update_dialog.min_size = Vector2i(560, 180)
+	var dialog_theme := Theme.new()
+	dialog_theme.default_font = font
+	dialog_theme.default_font_size = 17
+	update_dialog.theme = dialog_theme
+	add_child(update_dialog)
+	update_dialog.add_cancel_button("닫기").pressed.connect(updater.cancel)
+	update_dialog.close_requested.connect(updater.cancel)
+	update_dialog.confirmed.connect(confirm_update)
+	updater.changed.connect(refresh_update_ui)
+
+func confirm_update() -> void:
+	match updater.state:
+		TryUpdater.State.AVAILABLE:
+			updater.download_update()
+		TryUpdater.State.READY:
+			if not records.save():
+				updater.fail("기록을 저장하지 못했습니다. 설치 전에 저장 공간을 확인해 주세요.")
+			elif updater.launch_installer():
+				get_tree().quit()
+		_:
+			updater.check_for_updates()
+
+func show_updates() -> void:
+	refresh_update_ui()
+	update_dialog.popup_centered(Vector2i(560, 180))
+	if updater.state in [TryUpdater.State.IDLE, TryUpdater.State.FAILED, TryUpdater.State.CURRENT]:
+		updater.check_for_updates()
+
+func refresh_update_ui() -> void:
+	update_dialog.dialog_text = updater.message
+	var action := update_dialog.get_ok_button()
+	action.disabled = updater.state in [TryUpdater.State.CHECKING, TryUpdater.State.DOWNLOADING]
+	match updater.state:
+		TryUpdater.State.AVAILABLE:
+			action.text = "다운로드"
+		TryUpdater.State.READY:
+			action.text = "설치하고 종료"
+		_:
+			action.text = "다시 확인"
+	if is_instance_valid(update_button):
+		update_button.text = "새 버전 받기" if updater.state in [TryUpdater.State.AVAILABLE, TryUpdater.State.READY] else "업데이트 확인"
 
 func configure_input() -> void:
 	var bindings := {"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "jump": [KEY_SPACE], "retry": [KEY_R], "pause_game": [KEY_ESCAPE], "fullscreen": [KEY_F11], "mute": [KEY_M]}
@@ -396,13 +453,16 @@ func show_menu() -> void:
 	var start := button(card, "도전하기  →", Vector2(32, 233), Vector2(208, 48), start_run, true)
 	button(card, "내 기록", Vector2(252, 233), Vector2(104, 48), show_records)
 	button(card, "종료", Vector2(368, 233), Vector2(80, 48), quit_game)
+	if OS.get_name() == "Windows":
+		update_button = button(overlay, "업데이트 확인", Vector2(735, 392), Vector2(160, 36), show_updates)
+		refresh_update_ui()
 	panel(card, Vector2(573, 58), Vector2(225, 223), Color("2d4b48"))
 	text(card, "첫 번째 도전", Vector2(592, 76), Vector2(180, 23), 13, MINT)
 	text(card, "01  튜토리얼?", Vector2(592, 111), Vector2(200, 32), 23)
 	text(card, "초원 · 체크포인트 2개\n함정 3종 · 숨겨진 길 1개", Vector2(592, 154), Vector2(200, 52), 13, MUTED)
 	text(card, "실패해도, 0.5초면 다시.", Vector2(592, 234), Vector2(200, 24), 13, Color("f5ce95"))
 	text(overlay, "A / D 또는 ← →  이동     SPACE  점프 / 시작     F11  전체 화면", Vector2(64, 472), Vector2(830, 28), 13, CREAM)
-	text(overlay, "WINDOWS  /  MVP 0.1.0", Vector2(65, 508), Vector2(400, 18), 10, Color("b5c4a2"))
+	text(overlay, "WINDOWS  /  v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(400, 18), 10, Color("b5c4a2"))
 	start.grab_focus()
 	if not records.last_error.is_empty():
 		toast(records.last_error, 5)
