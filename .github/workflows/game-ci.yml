@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       verified_run_id:
-        description: 'Recovery only: successful Godot Windows run for this exact main commit; reuse its Windows-tested artifacts'
+        description: 'Recovery only: successful Godot Windows run with identical shipped game inputs; reuse its Windows-tested artifacts'
         required: false
         type: string
 
@@ -135,6 +135,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: write
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
