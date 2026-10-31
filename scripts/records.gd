@@ -1,8 +1,10 @@
 class_name TryRecords
 extends RefCounted
 
+const MAX_SAFE_COUNTER := 9_007_199_254_740_991
+
 var path := "user://records.json"
-var data := {"version": 1, "deaths": 0, "attempts": 0, "clears": 0, "best_time": 0.0, "no_death": false, "secret": false, "music": true, "sfx": true}
+var data := {"version": 1, "deaths": 0, "attempts": 0, "clears": 0, "best_time": 0.0, "no_death": false, "secret": false, "music": true, "sfx": true, "muted": false}
 var last_error := ""
 
 func _init(test_mode: bool = false) -> void:
@@ -21,11 +23,14 @@ func load_records() -> void:
 		last_error = "기록 파일을 읽지 못했습니다. 이번 기록은 새로 저장합니다."
 		return
 	for key in ["deaths", "attempts", "clears"]:
-		if loaded.get(key) is float or loaded.get(key) is int:
-			data[key] = maxi(0, int(loaded[key]))
+		var value = loaded.get(key)
+		if value is float or value is int:
+			# JSON numbers are doubles: reject overflow before converting to int.
+			data[key] = int(value) if is_finite(float(value)) and value >= 0 and value <= MAX_SAFE_COUNTER else 0
 	if loaded.get("best_time") is float or loaded.get("best_time") is int:
-		data.best_time = maxf(0, float(loaded.best_time))
-	for key in ["no_death", "secret", "music", "sfx"]:
+		var best := float(loaded.best_time)
+		data.best_time = best if is_finite(best) and best > 0 and best < float(MAX_SAFE_COUNTER) / 100.0 else 0.0
+	for key in ["no_death", "secret", "music", "sfx", "muted"]:
 		if loaded.get(key) is bool:
 			data[key] = loaded[key]
 
