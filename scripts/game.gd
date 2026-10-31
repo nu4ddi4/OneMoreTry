@@ -52,8 +52,7 @@ func _ready() -> void:
 	records = RecordsScript.new(test_mode)
 	sound = SoundScript.new()
 	add_child(sound)
-	sound.sfx_on = records.data.sfx and not test_mode
-	sound.set_music(records.data.music and not test_mode)
+	apply_audio_settings()
 	camera = Camera2D.new()
 	camera.position = Vector2(480, 270)
 	add_child(camera)
@@ -136,6 +135,11 @@ func configure_input() -> void:
 			var event := InputEventKey.new()
 			event.physical_keycode = key
 			InputMap.action_add_event(action, event)
+
+func apply_audio_settings() -> void:
+	var audible: bool = not records.data.muted and not test_mode
+	sound.set_effects(records.data.sfx and audible)
+	sound.set_music(records.data.music and audible)
 
 func build_traps() -> void:
 	for i in range(3):
@@ -236,13 +240,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif event.is_action_pressed("mute"):
-		var on := not (sound.music_on or sound.sfx_on)
-		records.data.music = on
-		records.data.sfx = on
-		sound.sfx_on = on
-		sound.set_music(on)
+		records.data.muted = not records.data.muted
+		apply_audio_settings()
 		save_records()
-		toast("소리 켜짐" if on else "소리 꺼짐", 1.4)
+		if mode == Mode.PAUSED:
+			pause_game()
+		toast("소리 꺼짐" if records.data.muted else "음소거 해제", 1.4)
 	elif event.is_action_pressed("pause_game"):
 		if mode == Mode.PLAYING:
 			pause_game()
@@ -480,15 +483,15 @@ func pause_game() -> void:
 	button(card, "타이틀로", Vector2(216, 169), Vector2(174, 40), show_menu)
 	button(card, "음악 " + ("켜짐" if records.data.music else "꺼짐"), Vector2(30, 225), Vector2(174, 36), func():
 		records.data.music = not records.data.music
-		sound.set_music(records.data.music)
+		apply_audio_settings()
 		save_records()
 		pause_game())
 	button(card, "효과음 " + ("켜짐" if records.data.sfx else "꺼짐"), Vector2(216, 225), Vector2(174, 36), func():
 		records.data.sfx = not records.data.sfx
-		sound.sfx_on = records.data.sfx
+		apply_audio_settings()
 		save_records()
 		pause_game())
-	text(card, "ESC  계속하기", Vector2(30, 279), Vector2(360, 20), 11, MUTED)
+	text(card, "전체 음소거 중  ·  M 해제  /  ESC 계속하기" if records.data.muted else "ESC  계속하기", Vector2(30, 279), Vector2(360, 20), 11, MUTED)
 	resume.grab_focus()
 
 func resume_game() -> void:

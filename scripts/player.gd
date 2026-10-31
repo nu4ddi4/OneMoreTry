@@ -15,6 +15,7 @@ var enabled := false
 var facing := 1.0
 var coyote := 0.0
 var jump_buffer := 0.0
+var jump_cut_available := false
 var animation_time := 0.0
 var land_squash := 0.0
 var was_grounded := false
@@ -44,10 +45,15 @@ func _physics_process(delta: float) -> void:
 		velocity.y = JUMP_SPEED
 		coyote = 0
 		jump_buffer = 0
+		jump_cut_available = true
 		floor_snap_length = 0
 		jumped.emit()
-	if Input.is_action_just_released("jump") and velocity.y < 0:
+	# Read held state on resume as well: a release edge can occur while paused.
+	if jump_cut_available and not Input.is_action_pressed("jump") and velocity.y < 0:
 		velocity.y *= 0.46
+		jump_cut_available = false
+	if velocity.y >= 0:
+		jump_cut_available = false
 	var direction := Input.get_axis("move_left", "move_right")
 	velocity.x = move_toward(velocity.x, direction * SPEED, (2100.0 if is_on_floor() else 1500.0) * delta)
 	if direction != 0:
@@ -76,6 +82,7 @@ func respawn(at: Vector2) -> void:
 	velocity = Vector2.ZERO
 	coyote = 0
 	jump_buffer = 0
+	jump_cut_available = false
 	alive = true
 	was_grounded = false
 	land_squash = 0.25
