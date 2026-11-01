@@ -22,7 +22,7 @@ func check(value: bool, description: String) -> void:
 		push_error("FAIL: " + description)
 
 func metadata(version: String = "0.3.0") -> Dictionary:
-	return {"tag_name": "v" + version, "draft": false, "prerelease": false, "assets": [{"name": "OneMoreTry-v%s-Windows-x64-Setup.exe" % version, "digest": "sha256:" + PAYLOAD.sha256_text(), "size": PAYLOAD.to_utf8_buffer().size(), "browser_download_url": "https://untrusted.invalid/payload.exe"}]}
+	return {"tag_name": "v" + version, "draft": false, "prerelease": version.ends_with("-beta"), "assets": [{"name": "OneMoreTry-v%s-Windows-x64-Setup.exe" % version, "digest": "sha256:" + PAYLOAD.sha256_text(), "size": PAYLOAD.to_utf8_buffer().size(), "browser_download_url": "https://untrusted.invalid/payload.exe"}]}
 
 func wait_for_request() -> void:
 	var deadline := Time.get_ticks_msec() + 5000
@@ -42,7 +42,11 @@ func run() -> void:
 	check(Updater.is_newer("0.10.0", "0.9.9"), "Versions compare numerically, including double digits")
 	check(not Updater.is_newer("0.2.0", "0.2.0"), "Same version is not an update")
 	check(not Updater.is_newer("0.1.9", "0.2.0"), "Downgrades are not offered")
-	for value in ["../1.2.3", "1.2", "1.2.3-beta", "01.2.3", "999999999999.0.0"]:
+	check(Updater.is_newer("0.5.0", "0.5.0-beta"), "Stable follows the beta of the same core version")
+	check(not Updater.is_newer("0.5.0-beta", "0.5.0"), "Same-core beta cannot downgrade stable")
+	check(not Updater.is_newer("0.4.9", "0.5.0-beta"), "Switching to stable never downgrades a newer beta")
+	check(Updater.is_newer("0.5.1-beta", "0.5.0"), "A higher-core beta can update stable")
+	for value in ["../1.2.3", "1.2", "1.2.3-beta.1", "1.2.3-alpha", "01.2.3", "999999999999.0.0"]:
 		check(Updater.version_parts(value).is_empty(), "Reject malformed version: " + value)
 	var data := metadata()
 	var selected := Updater.select_release(data, "0.2.0")
@@ -63,9 +67,24 @@ func run() -> void:
 	data.assets[0].name = "another-installer.exe"
 	check(Updater.select_release(data, "0.2.0").is_empty(), "Unrelated release assets cannot be installed")
 	check(Updater.select_release(metadata("0.1.0"), "0.2.0").is_empty(), "Older release cannot be selected")
-	updater = Updater.new()
+	var releases := [metadata("0.4.0-beta"), metadata("0.5.0"), metadata("0.6.0-beta"), metadata("0.5.0-beta")]
+	check(Updater.select_release(releases, "0.4.0", "beta").get("version") == "0.6.0-beta", "Beta feed selects highest beta, independent of API ordering")
+	check(Updater.select_release(releases, "0.4.0", "stable").get("version") == "0.5.0", "Stable selection excludes betas")
+	check(Updater.select_release(metadata("0.4.9"), "0.5.0-beta", "stable").is_empty(), "Channel switch cannot select lower-core stable")
+	check(Updater.select_release(metadata("0.5.0-beta"), "0.5.0", "beta").is_empty(), "Channel switch cannot select same-core beta over stable")
+	check(not Updater.select_release(metadata("0.5.0"), "0.5.0-beta", "stable").is_empty(), "Channel switch may promote same-core beta to stable")
+	check(Updater.select_release(metadata("0.5.0"), "0.4.0", "beta").is_empty(), "Beta channel does not receive stable releases")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_update_settings.cfg"))
+	updater = Updater.new(true)
 	root.add_child(updater)
 	updater.current_version = "0.2.0"
+	check(updater.set_channel("beta") and updater.feed_url() == Updater.BETA_URL, "Channel selection uses the beta releases feed")
+	var restored := Updater.new(true)
+	root.add_child(restored)
+	check(restored.channel == "beta", "Selected channel persists across updater instances")
+	restored.free()
+	check(not updater.set_channel("invalid") and updater.channel == "beta", "Invalid channel cannot replace saved selection")
+	check(updater.set_channel("stable") and updater.feed_url() == Updater.LATEST_URL, "Stable channel uses GitHub latest stable")
 	# Isolated cache paths; never touch the player's update downloads or records.
 	updater.installer_path = "user://test-updater.exe"
 	updater.release = selected
@@ -83,6 +102,25 @@ func run() -> void:
 	if not fixture_url.is_empty():
 		await fetch_metadata("/metadata")
 		check(updater.state == Updater.State.AVAILABLE, "Valid metadata offers the update without downloading it")
+		updater.automatic_download = true
+		var local_download := func():
+			if updater.state == Updater.State.AVAILABLE:
+				updater.release.url = fixture_url + "/installer"
+				updater.release.filename = "test-updater.exe"
+		updater.changed.connect(local_download)
+		await fetch_metadata("/metadata")
+		updater.changed.disconnect(local_download)
+		check(updater.state == Updater.State.READY, "Automatic update verifies and stages the selected channel download")
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(updater.installer_path))
+		updater.automatic_download = false
+		check(updater.set_channel("beta"), "Switch from staged installer clears the previous channel")
+		check(updater.release.is_empty() and updater.installer_path.is_empty() and not updater.launch_installer(), "Old-channel staged installer cannot launch after switching")
+		await fetch_metadata("/betas")
+		check(updater.release.get("version") == "0.5.0-beta", "Real HTTP beta list skips drafts and stable entries")
+		updater.current_version = "0.5.0-beta"
+		updater.set_channel("stable")
+		await fetch_metadata("/metadata")
+		check(updater.state == Updater.State.CURRENT and updater.release.is_empty(), "Real HTTP stable channel switch refuses downgrade")
 		updater.current_version = "0.3.0"
 		await fetch_metadata("/metadata")
 		check(updater.state == Updater.State.CURRENT, "Current version shows no update")
@@ -110,9 +148,10 @@ func run() -> void:
 		updater.release.url = fixture_url + "/slow"
 		updater.set_status(Updater.State.AVAILABLE, "test")
 		updater.download_update()
-		updater.cancel()
+		updater.set_channel("beta")
 		await create_timer(0.1).timeout
-		check(updater.state == Updater.State.IDLE and not FileAccess.file_exists(updater.installer_path + ".part"), "Cancelling aborts HTTP and removes partial files")
+		check(updater.state == Updater.State.IDLE and updater.release.is_empty() and not FileAccess.file_exists("user://updates/test-updater.exe.part"), "Switching channel aborts HTTP and removes partial files")
 	updater.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_update_settings.cfg"))
 	print("Updater: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
