@@ -66,7 +66,7 @@ func _physics_process(delta: float) -> void:
 		land_squash = 0.2
 	was_grounded = is_on_floor()
 	if position.y > 580:
-		die("발밑도 가끔은 의심해 보세요.")
+		die("fall")
 	queue_redraw()
 
 func die(reason: String) -> void:
