@@ -230,6 +230,18 @@ func run() -> void:
 	await frames(5)
 	check(game.checkpoint_index == -1 and game.run_deaths == 0 and not game.secret_collected, "New run resets its checkpoint, deaths and stage secret")
 	check(game.records.data.clears == 1, "New run preserves lifetime records")
+	var real_test_path: String = game.records.path
+	game.records.path = "user://missing-save-parent/records.json"
+	check(not game.save_records(), "Save failure is reported to callers")
+	game.finish_run()
+	await frames(2)
+	check(game.toast_clock > 0 and game.toast_label.visible and not game.records.last_error.is_empty(), "Clear keeps a failed-save message visible")
+	game.quit_game()
+	await frames(2)
+	check(game.quit_dialog.visible, "Save failure requires an explicit choice before exiting without records")
+	check(game.quit_dialog.get_cancel_button().has_focus(), "Failed-save exit defaults to keeping the game open")
+	game.quit_dialog.hide()
+	game.records.path = real_test_path
 	# A full no-teleport traversal with normal movement/jump inputs is run separately.
 	game.queue_free()
 	await process_frame
