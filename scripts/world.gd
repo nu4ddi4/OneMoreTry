@@ -64,18 +64,10 @@ func _draw() -> void:
 			grass(Vector2(x, FLOOR), i)
 	for x in [340, 860, 1380, 2270, 2510, 3280, 3520]:
 		bush(Vector2(x, FLOOR))
-	signpost(Vector2(254, 416), "SPACE  점프", false)
-	signpost(Vector2(528, 416), "바닥을 잘 보세요", true)
-	signpost(Vector2(1120, 416), "위도 보세요!", true)
-	signpost(Vector2(1560, 416), "저장 완료 →", false)
-	signpost(Vector2(2540, 416), "정말 출구일까?", true)
-	signpost(Vector2(3270, 416), "이번엔 진짜!", false)
 	for index in range(CHECKPOINTS.size()):
 		flag(CHECKPOINTS[index], game.checkpoint_index >= index, str(index + 1))
-	# An intentionally suspicious false finish. The actual exit has a clear arch.
 	draw_rect(Rect2(2620, 346, 4, 70), Color("44655d"))
 	draw_rect(Rect2(2624, 347, 32, 21), Color("d89376"))
-	draw_string(font, Vector2(2634, 363), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("fff1cf"))
 	goal(Vector2(GOAL, FLOOR))
 	if not game.secret_collected:
 		var sy := sin(visual_time * 3) * 3
@@ -84,7 +76,6 @@ func _draw() -> void:
 			pts[i] += SECRET + Vector2(0, sy)
 		draw_colored_polygon(pts, Color("fff2b4"))
 		draw_rect(Rect2(SECRET + Vector2(-2, -2 + sy), Vector2(4, 4)), Color("e5a764"))
-		draw_string(font, Vector2(2025, 246), "조금 다른 길", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("477f71"))
 
 func on_ground(x: float) -> bool:
 	for rect in GROUNDS:
@@ -123,12 +114,6 @@ func grass(at: Vector2, seed_value: int) -> void:
 	if seed_value % 3 == 0:
 		draw_rect(Rect2(at + Vector2(1, -14), Vector2(6, 6)), Color("f3d498") if seed_value % 2 else Color("f1a58c"))
 		draw_rect(Rect2(at + Vector2(3, -12), Vector2(2, 2)), Color("f9edc9"))
-
-func signpost(at: Vector2, text: String, suspicious: bool) -> void:
-	draw_rect(Rect2(at + Vector2(-2, -35), Vector2(5, 35)), Color("7d6049"))
-	draw_rect(Rect2(at + Vector2(-48, -55), Vector2(98, 25)), Color("715d4b"))
-	draw_rect(Rect2(at + Vector2(-46, -53), Vector2(94, 20)), Color("e4bf84"))
-	draw_string(font, at + Vector2(-41, -39), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("714e43") if suspicious else Color("3a6257"))
 
 func flag(at: Vector2, active: bool, number: String) -> void:
 	draw_rect(Rect2(at + Vector2(-7, -3), Vector2(18, 3)), Color("44635b"))

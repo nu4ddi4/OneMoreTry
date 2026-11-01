@@ -61,7 +61,7 @@ func _physics_process(delta: float) -> void:
 					state = 2
 					game.sound.effect("trap")
 			if state == 2 and box.intersects(Rect2(position + Vector2(5, -25), Vector2(size.x - 10, 25))):
-				p.die("금 간 바닥에서 가시가 올라옵니다!")
+				p.die("spring")
 		Kind.FALLING:
 			if state == 0 and p.position.x > position.x - 95 and p.position.x < position.x + size.x + 50:
 				state = 1
@@ -74,10 +74,10 @@ func _physics_process(delta: float) -> void:
 				fall_speed += delta * 1500
 				fall_offset = minf(fall_offset + fall_speed * delta, 416 - position.y - size.y)
 				if box.intersects(Rect2(position + Vector2(3, fall_offset + 3), size - Vector2(6, 6))):
-					p.die("물음표 아래에서는 잠깐 멈춰 보세요.")
+					p.die("falling")
 		Kind.SPIKES:
 			if box.intersects(Rect2(position + Vector2(4, -20), Vector2(size.x - 8, 19))):
-				p.die("가시는 눈으로 보고, 점프로 넘고!")
+				p.die("spikes")
 	queue_redraw()
 
 func _draw() -> void:

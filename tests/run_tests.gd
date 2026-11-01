@@ -33,6 +33,37 @@ func run() -> void:
 	await frames(3)
 	check(game.mode == OneMoreGame.Mode.MENU, "Title screen is the initial state")
 	check(game.traps.size() == 14, "Stage contains all authored traps")
+	# Global mute must not replace the independent music/effects preferences.
+	game.records.data.music = false
+	game.records.data.sfx = true
+	game.sound.music_on = false
+	game.sound.sfx_on = true
+	var mute := InputEventAction.new()
+	mute.action = "mute"
+	mute.pressed = true
+	game._unhandled_input(mute)
+	check(not game.records.data.music and game.records.data.sfx and game.records.data.get("muted", false), "Global mute preserves separate audio preferences")
+	game.records.save()
+	var muted_records := TryRecords.new(true)
+	muted_records.load_records()
+	check(muted_records.data.get("muted", false) and not muted_records.data.music and muted_records.data.sfx, "Global mute and individual audio preferences survive reload")
+	game._unhandled_input(mute)
+	check(not game.records.data.music and game.records.data.sfx and not game.records.data.get("muted", false), "Unmute restores the previous audio configuration")
+	check(not game.sound.music_on and not game.sound.sfx_on, "Mute controls cannot enable audio in test mode")
+	game.test_mode = false
+	game.apply_audio_settings()
+	check(not game.sound.music_on and game.sound.sfx_on, "Unmuted audio playback respects a disabled music preference")
+	game.sound.effect("secret")
+	check(game.sound.voices[0].playing, "Sound-effect fixture starts playback before muting")
+	game._unhandled_input(mute)
+	var any_voice_playing := false
+	for voice in game.sound.voices:
+		any_voice_playing = any_voice_playing or voice.playing
+	check(not any_voice_playing, "Global mute immediately stops effects already playing")
+	game.test_mode = true
+	game._unhandled_input(mute)
+	game.records.data.music = true
+	game.records.data.sfx = true
 	game.start_run()
 	await frames(5)
 	check(game.player.is_on_floor(), "Player settles on the solid start ground")
@@ -143,6 +174,20 @@ func run() -> void:
 	game.resume_game()
 	await frames(3)
 	check(game.elapsed > paused_time, "Resume restarts the timer")
+	await place(Vector2(200, 416))
+	Input.action_press("jump")
+	await frames(4)
+	game.pause_game()
+	var jump_velocity := game.player.velocity.y
+	Input.action_release("jump")
+	await frames(8)
+	check(game.player.velocity.y == jump_velocity, "Releasing jump while paused does not advance physics")
+	game.resume_game()
+	await frames(1)
+	check(game.player.velocity.y > jump_velocity * 0.6, "Releasing jump while paused still cuts the jump after resume")
+	var cut_velocity := game.player.velocity.y
+	await frames(1)
+	check(game.player.velocity.y < cut_velocity * 0.7, "Resumed jump is cut once rather than once per frame")
 	await place(Vector2(2380, 416))
 	check(game.checkpoint_index == 1, "Second checkpoint activates")
 	await place(Vector2(1460, 416))
@@ -160,6 +205,21 @@ func run() -> void:
 	loaded.load_records()
 	check(loaded.data.deaths == game.records.data.deaths and loaded.data.secret, "Saved records survive loading into a fresh store")
 	check(is_equal_approx(loaded.data.best_time, game.records.data.best_time), "Personal best round-trips through JSON")
+	var invalid_numbers := FileAccess.open(loaded.path, FileAccess.WRITE)
+	invalid_numbers.store_string('{"version":1,"best_time":1e309,"deaths":1e309,"attempts":1e30,"clears":12,"music":false,"sfx":true}')
+	invalid_numbers.close()
+	var sanitized := TryRecords.new(true)
+	sanitized.load_records()
+	check(is_finite(sanitized.data.best_time) and sanitized.data.best_time == 0, "Non-finite best times cannot corrupt the record display")
+	check(sanitized.data.deaths == 0 and sanitized.data.attempts == 0, "Non-finite or out-of-range counters are discarded before integer conversion")
+	check(sanitized.data.clears == 12 and not sanitized.data.music and sanitized.data.sfx, "Invalid numeric fields do not discard valid records and preferences")
+	check(not sanitized.data.get("muted", true), "Existing saves without a global mute field remain compatible")
+	invalid_numbers = FileAccess.open(loaded.path, FileAccess.WRITE)
+	invalid_numbers.store_string('{"version":1,"best_time":1e200}')
+	invalid_numbers.close()
+	sanitized = TryRecords.new(true)
+	sanitized.load_records()
+	check(sanitized.data.best_time == 0, "Finite times too large for centisecond formatting are rejected")
 	var corrupt := FileAccess.open(loaded.path, FileAccess.WRITE)
 	corrupt.store_string("{broken")
 	corrupt.close()

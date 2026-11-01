@@ -1,5 +1,7 @@
 # 개발 운영
 
+플레이어용 문구는 전역 `plain-product-copy` 스킬을 적용합니다. 제목·동작·상태만 짧게 남기며 기획 의도와 공략은 내부 문서에서 다룹니다.
+
 Godot 4.6.3 Standard와 GDScript를 사용합니다. 소스 편집과 로컬 플레이에 .NET은 필요하지 않습니다.
 
 ## 브랜치
@@ -50,17 +52,27 @@ godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
 Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WINDOWS.txt`를 `README.txt`로, 라이선스를 `licenses` 폴더에 복사한 뒤 컴파일합니다.
 
 ```powershell
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.0 installer/OneMoreTry.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.1 /DBaseVersion=0.2.1 installer/OneMoreTry.iss
 ./tools/test_installer.ps1  # 일회용 Windows 테스트 환경에서만 실행: 테스트 기록을 생성합니다.
 ```
 
-결과는 `build/installer/OneMoreTry-v0.2.0-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
+결과는 `build/installer/OneMoreTry-v0.2.1-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
 
-`project.godot`의 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올리고 `feature/* → beta → main` PR을 병합합니다. `main` push에서 자동 회귀·업데이트 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 **동일한** EXE 및 설치 파일을 정식 릴리스로 게시합니다. 설치형 EXE와 포터블 ZIP 각각에 SHA-256 파일을 제공합니다. 이미 게시한 버전은 건드리지 않습니다. 실패한 배포는 `main`의 `Godot Windows` 수동 실행에서 `release_tag=v0.2.0`처럼 프로젝트 버전을 지정해 재시도할 수 있습니다. `beta`에서는 릴리스를 게시하지 않습니다.
+`project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `feature/* → beta → main` PR 순서로 병합하면 두 브랜치 모두 검증 후 자동 릴리스합니다.
 
-Windows runner가 멈춘 경우 수동 배포의 `verified_run_id`에 이전에 성공한 `Godot Windows` 실행 번호를 지정해 검증한 artifact를 재사용할 수 있습니다. 성공 상태와 Windows 검사, 현재 main의 조상 커밋 여부, 게임·리소스·설치 및 배포 안내 파일이 동일한지 확인한 후에만 게시합니다. 배포 자동화 복구만 변경한 커밋도 이 경로를 사용할 수 있으며 게임 입력이 달라지면 거부합니다. 로컬 업로드 토큰을 앱에 넣지 않습니다.
+- `beta`: `v0.2.1-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
+- `main`: `v0.2.1`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
+- 같은 버전으로 다시 push하면 기존 공개 릴리스를 변경하지 않습니다. 새 배포에는 숫자 버전을 올립니다. PR 검사는 릴리스를 게시하지 않습니다.
 
-업데이트 공급자는 공개 저장소 `nu4ddi4/side-scroller-game`의 `/releases/latest`입니다. `scripts/updater.gd`는 Windows 배포본 시작 시 한 번 확인하며, 편집기와 `--test`에서는 자동 네트워크 요청을 하지 않습니다. 정식 SemVer 태그와 정확한 설치 파일명·크기·GitHub asset digest를 확인한 뒤 사용자 요청 시 `.part`로 내려받습니다. SHA-256과 크기가 맞으면 `.exe`로 바꾸고, 별도 설치 확인 후 다시 검증해 직접 프로세스로 실행합니다. 셸이나 저장소 인증 토큰을 사용하지 않습니다. 403·오프라인·타임아웃·손상 파일은 재시도 가능한 상태로 처리하며 취소 시 부분 파일을 지웁니다. 게임 기록을 저장한 후 게임이 종료되고 설치 UI가 진행됩니다. 다운로드 파일은 사용자 데이터의 `updates` 폴더에 남습니다.
+`Godot Windows` Actions는 회귀·전체 통과·실제 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 동일한 EXE와 설치 파일을 게시합니다. ZIP·Setup 각각 SHA-256 파일을 제공합니다. `tools/release_config.py`가 소스/Windows 버전 일치 여부를 검사하고 빌드 때만 채널 버전을 적용합니다. `release-info` artifact로 버전·채널·원본 커밋을 전달해 베타 파일의 정식 게시를 막습니다.
+
+실패한 배포는 해당 브랜치의 `Godot Windows` 수동 실행으로 재시도합니다. 선택 입력 `release_tag`는 브랜치와 프로젝트 버전에 정확히 맞아야 합니다. `verified_run_id` 복구는 성공한 push/수동 실행의 Windows 검사, 조상 커밋과 동일한 게임 입력, 동일 채널·버전의 manifest를 모두 확인한 뒤 artifact를 재사용합니다. PR 빌드나 다른 채널의 artifact는 사용할 수 없습니다. 로컬 토큰은 앱에 넣지 않습니다.
+
+게임의 **업데이트 → 채널**에서 정식·베타를 선택합니다. 선택은 기록과 별도인 `user://update_settings.cfg`에 저장하며 재실행해도 유지됩니다. 첫 실행 기본값은 설치한 빌드의 채널입니다. Windows 배포본 시작 시 선택 채널을 확인하고 새 버전 설치 파일을 자동 다운로드합니다. 편집기와 `--test`에서는 자동 네트워크 요청을 하지 않습니다. 정식은 GitHub `/releases/latest`, 베타는 `/releases?per_page=100`에서 최신 유효 베타를 고릅니다.
+
+버전은 숫자 세 부분을 먼저 비교하고 같은 숫자에서는 `X.Y.Z-beta < X.Y.Z`로 비교합니다. 채널을 전환해도 현재 버전보다 높은 버전만 받습니다. 예를 들어 `0.5.0-beta`에서 정식 `0.4.9`는 받지 않으며 정식 `0.5.0`이 나오면 받습니다. 정식 `0.5.0`에서 베타로 바꾸면 `0.5.1-beta` 이상을 기다립니다. 채널 변경 시 이전 요청·부분 파일·설치 대기를 취소합니다.
+
+업데이트는 정확한 태그·설치 파일명·크기·GitHub asset digest를 확인하고 `.part`로 내려받습니다. SHA-256과 크기가 맞으면 `.exe`로 바꿉니다. **설치하고 종료**를 선택하면 기록 저장과 파일 재검증 후 설치 UI를 실행하고 게임을 종료합니다. 셸이나 인증 토큰을 사용하지 않습니다. 403·오프라인·타임아웃·손상 파일은 재시도 가능한 상태로 처리하며 취소 시 부분 파일을 지웁니다.
 
 `tools/test_updater.py`는 로컬 HTTP 서버로 버전 비교, 메타데이터, 정상·변조·불완전·과대 다운로드와 취소를 실제 Godot HTTPRequest로 검증합니다. `tools/test_installer.ps1`는 한글·공백 경로에 설치·재설치하고 실제 EXE를 실행한 뒤 제거하며, 각 단계에서 사용자 기록을 확인합니다. 기존 v0.1.0 사용자는 새 설치 파일을 한 번 수동 실행해야 합니다. ZIP 사용자가 업데이트 설치를 선택하면 설치형이 되며 이후에는 시작 메뉴의 설치본을 실행합니다.
 
@@ -76,7 +88,7 @@ Windows runner가 멈춘 경우 수동 배포의 `verified_run_id`에 이전에 
 
 `scripts/records.gd`: 버전 검사와 형식 검증, 임시 파일을 통한 기록 교체.
 
-`scripts/updater.gd`: GitHub 정식 버전 확인·다운로드·SHA-256 검증·설치 실행.
+`scripts/updater.gd`: GitHub 채널별 버전 확인·다운로드·SHA-256 검증·설치 실행.
 
 `scripts/sound.gd`, `tools/make_audio.py`: 자체 제작 칩튠 BGM과 효과음. `OneMoreSans.otf`는 SIL OFL의 Noto Sans CJK KR에서 한국어와 사용 문자를 추출한 폰트입니다.
 

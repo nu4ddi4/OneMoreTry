@@ -16,13 +16,21 @@ class Fixture(BaseHTTPRequestHandler):
     def do_GET(self):
         status = 200
         body = PAYLOAD
-        if self.path == "/metadata":
+        if self.path in ("/metadata", "/betas"):
             body = json.dumps({
                 "tag_name": "v0.3.0", "draft": False, "prerelease": False,
                 "assets": [{"name": "OneMoreTry-v0.3.0-Windows-x64-Setup.exe",
                             "size": len(PAYLOAD),
                             "digest": "sha256:" + hashlib.sha256(PAYLOAD).hexdigest()}],
             }).encode()
+            if self.path == "/betas":
+                entries = []
+                for version in ("0.4.0-beta", "0.5.0", "0.5.0-beta", "0.6.0-beta"):
+                    entry = json.loads(body)
+                    entry.update(tag_name='v' + version, prerelease=version.endswith('-beta'), draft=version == '0.6.0-beta')
+                    entry['assets'][0]['name'] = f'OneMoreTry-v{version}-Windows-x64-Setup.exe'
+                    entries.append(entry)
+                body = json.dumps(entries).encode()
         elif self.path == "/malformed":
             body = b"invalid JSON"
         elif self.path == "/unavailable":
