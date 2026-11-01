@@ -2,6 +2,9 @@
 #ifndef AppVersion
   #error AppVersion must match project.godot
 #endif
+#ifndef BaseVersion
+  #define BaseVersion AppVersion
+#endif
 [Setup]
 AppId={{8B5C1547-21FA-47B4-B183-B0CF8AA2F502}
 AppName=One More Try!
@@ -26,7 +29,7 @@ CloseApplications=yes
 CloseApplicationsFilter=OneMoreTry.exe
 RestartApplications=no
 SetupLogging=yes
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#BaseVersion}.0
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

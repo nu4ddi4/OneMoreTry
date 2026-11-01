@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional stable release tag (for example v0.2.0); main only'
+        description: 'Optional matching tag: main v0.2.1, beta v0.2.1-beta'
         required: false
         type: string
       verified_run_id:
@@ -46,6 +46,7 @@ jobs:
 
   build:
     name: Test & export Windows
+    needs: branch-policy
     if: github.event_name != 'workflow_dispatch' || inputs.verified_run_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -58,6 +59,12 @@ jobs:
           chmod +x /tmp/godot/Godot_v4.6.3-stable_linux.x86_64
           sudo ln -s /tmp/godot/Godot_v4.6.3-stable_linux.x86_64 /usr/local/bin/godot
           python3 tools/fetch_templates.py
+      - name: Validate release configuration and stamp runtime channel
+        env:
+          RELEASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          python3 tools/test_release_config.py
+          python3 tools/release_config.py --branch "$RELEASE_BRANCH" --sha "$GITHUB_SHA" --stamp --output build/release-info.json
       - name: Import project
         run: godot --headless --editor --import --quit
       - name: Physics and save regression tests
@@ -80,6 +87,11 @@ jobs:
           name: OneMoreTry-Windows-x64
           path: build/windows/
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-info
+          path: build/release-info.json
+          retention-days: 30
 
   windows-smoke:
     name: Windows launch
@@ -92,13 +104,17 @@ jobs:
         with:
           name: OneMoreTry-Windows-x64
           path: build/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-info
+          path: build
       - name: Build per-user Windows installer
         shell: pwsh
         run: |
-          $version = (Select-String -Path project.godot -Pattern '^config/version="([^"]+)"').Matches.Groups[1].Value
+          $info = Get-Content build/release-info.json -Raw | ConvertFrom-Json
           $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $compiler)) { throw 'Inno Setup 6 is required on this runner' }
-          & $compiler "/DAppVersion=$version" installer/OneMoreTry.iss
+          & $compiler "/DAppVersion=$($info.version)" "/DBaseVersion=$($info.base_version)" installer/OneMoreTry.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
       - name: Install, reinstall, launch and uninstall with saved-record preservation
         shell: pwsh
@@ -127,7 +143,7 @@ jobs:
 
   publish:
     name: Publish Windows release
-    if: always() && needs.branch-policy.result == 'success' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')) && ((needs.build.result == 'success' && needs.windows-smoke.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.verified_run_id != ''))
+    if: always() && needs.branch-policy.result == 'success' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((needs.build.result == 'success' && needs.windows-smoke.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.verified_run_id != ''))
     needs: [branch-policy, build, windows-smoke]
     runs-on: ubuntu-latest
     concurrency:
@@ -141,41 +157,53 @@ jobs:
       GH_REPO: ${{ github.repository }}
       REQUESTED_TAG: ${{ inputs.release_tag }}
       VERIFIED_RUN_ID: ${{ inputs.verified_run_id }}
+      RELEASE_BRANCH: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate release request
         id: release
         run: |
-          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo 'Release only from main'; exit 1; }
-          version=$(sed -n 's/^config\/version="\([^"]*\)"/\1/p' project.godot)
-          release_tag=${REQUESTED_TAG:-v$version}
-          [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected vMAJOR.MINOR.PATCH'; exit 1; }
-          [[ "$release_tag" == "v$version" ]] || { echo 'Tag must match project version'; exit 1; }
+          python3 tools/release_config.py --branch "$RELEASE_BRANCH" --sha "$GITHUB_SHA" --output /tmp/expected-release.json
+          release_tag=$(jq -r .tag /tmp/expected-release.json)
+          [[ -z "$REQUESTED_TAG" || "$REQUESTED_TAG" == "$release_tag" ]] || { echo 'Tag must match branch and project version'; exit 1; }
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "PRERELEASE=$(jq -r .prerelease /tmp/expected-release.json)" >> "$GITHUB_ENV"
           if [[ -n "$VERIFIED_RUN_ID" ]]; then
             [[ "$VERIFIED_RUN_ID" =~ ^[0-9]+$ ]] || { echo 'Expected a numeric verified run ID'; exit 1; }
             gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID" > /tmp/verified-run.json
             # A recovery commit may change publishing automation only. Require the
             # verified commit to be an ancestor and the shipped game inputs identical.
             verified_sha=$(jq -r .head_sha /tmp/verified-run.json)
-            jq -e '.name == "Godot Windows" and .path == ".github/workflows/game-ci.yml" and .status == "completed" and .conclusion == "success"' /tmp/verified-run.json
+            jq -e '.name == "Godot Windows" and .path == ".github/workflows/game-ci.yml" and .status == "completed" and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")' /tmp/verified-run.json
             git fetch origin "$verified_sha" --depth=1
             git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
             gh api "repos/$GH_REPO/compare/$verified_sha...$GITHUB_SHA" --jq .status | grep -Ex 'ahead|identical'
             gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID/jobs?per_page=100" > /tmp/verified-jobs.json
             jq -e '[.jobs[] | select((.name == "Test & export Windows" or .name == "Windows launch") and .conclusion == "success")] | length == 2' /tmp/verified-jobs.json
+            echo "ARTIFACT_SOURCE_SHA=$verified_sha" >> "$GITHUB_ENV"
             echo "ARTIFACT_RUN_ID=$VERIFIED_RUN_ID" >> "$GITHUB_ENV"
           else
+            echo "ARTIFACT_SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
             echo "ARTIFACT_RUN_ID=$GITHUB_RUN_ID" >> "$GITHUB_ENV"
           fi
           # A missing release is distinct from an authentication or server failure.
-          gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/releases.json
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | jq 'add' > /tmp/releases.json
           if jq -e --arg tag "$release_tag" '.[] | select(.tag_name == $tag and .draft == false)' /tmp/releases.json >/dev/null; then
             echo 'Published version exists; leave it untouched.'
             echo 'publish=false' >> "$GITHUB_OUTPUT"
           else
             echo 'publish=true' >> "$GITHUB_OUTPUT"
           fi
+      - uses: actions/download-artifact@v4
+        if: steps.release.outputs.publish == 'true'
+        with:
+          name: release-info
+          path: build
+          run-id: ${{ env.ARTIFACT_RUN_ID }}
+          github-token: ${{ github.token }}
+      - name: Verify artifact version, channel and source commit
+        if: steps.release.outputs.publish == 'true'
+        run: python3 tools/release_config.py --branch "$RELEASE_BRANCH" --sha "$GITHUB_SHA" --verify build/release-info.json --artifact-sha "$ARTIFACT_SOURCE_SHA"
       - uses: actions/download-artifact@v4
         if: steps.release.outputs.publish == 'true'
         with:
@@ -198,17 +226,21 @@ jobs:
           cd ../release
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" > "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip.sha256"
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" > "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe.sha256"
-      - name: Upload and publish the stable release
+      - name: Upload and publish the selected channel
         if: steps.release.outputs.publish == 'true'
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows 설치 및 업데이트" --notes-file docs/RELEASE_NOTES.md
+            gh release edit "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더!" --notes-file docs/RELEASE_NOTES.md
           else
-            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더! Windows 설치 및 업데이트" --notes-file docs/RELEASE_NOTES.md --draft
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG — 한 번만 더!" --notes-file docs/RELEASE_NOTES.md --draft
           fi
           gh release upload "$RELEASE_TAG" release/* --clobber
           # The updater requires GitHub's asset digest; never publish an unusable feed.
           release_api=$(gh release view "$RELEASE_TAG" --json apiUrl --jq .apiUrl)
           gh api "$release_api" > /tmp/uploaded-release.json
           jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          if [[ "$PRERELEASE" == true ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=true --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          fi
