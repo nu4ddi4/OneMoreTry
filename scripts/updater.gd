@@ -5,20 +5,32 @@ signal changed
 
 const REPOSITORY := "nu4ddi4/side-scroller-game"
 const LATEST_URL := "https://api.github.com/repos/" + REPOSITORY + "/releases/latest"
+const BETA_URL := "https://api.github.com/repos/" + REPOSITORY + "/releases?per_page=100"
 const DOWNLOAD_BASE := "https://github.com/" + REPOSITORY + "/releases/download/"
 const MAX_INSTALLER_SIZE := 256 * 1024 * 1024
 const CACHE_DIR := "user://updates"
 enum State { IDLE, CHECKING, CURRENT, AVAILABLE, DOWNLOADING, READY, FAILED }
 
 var state := State.IDLE
-var message := "새 버전을 확인할 수 있습니다."
+var message := "업데이트"
 var current_version: String = ProjectSettings.get_setting("application/config/version", "0.0.0")
 var release: Dictionary = {}
 var installer_path := ""
 var request: HTTPRequest
 var progress_clock := 0.0
+var channel: String = ProjectSettings.get_setting("application/config/release_channel", "stable")
+var automatic_download := false
+var settings_path: String
+
+func _init(test_mode: bool = false) -> void:
+	settings_path = "user://test_update_settings.cfg" if test_mode else "user://update_settings.cfg"
 
 func _ready() -> void:
+	var settings := ConfigFile.new()
+	if settings.load(settings_path) == OK:
+		var saved = settings.get_value("updates", "channel", channel)
+		if saved in ["stable", "beta"]:
+			channel = saved
 	request = HTTPRequest.new()
 	request.use_threads = true
 	request.max_redirects = 5
@@ -27,27 +39,38 @@ func _ready() -> void:
 
 static func version_parts(value: String) -> PackedInt64Array:
 	var pattern := RegEx.new()
-	pattern.compile("^(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})$")
+	pattern.compile("^(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})(-beta)?$")
 	var found := pattern.search(value)
 	if found == null:
 		return PackedInt64Array()
-	return PackedInt64Array([int(found.get_string(1)), int(found.get_string(2)), int(found.get_string(3))])
+	return PackedInt64Array([int(found.get_string(1)), int(found.get_string(2)), int(found.get_string(3)), 0 if value.ends_with("-beta") else 1])
 
 static func is_newer(candidate: String, installed: String) -> bool:
 	var next := version_parts(candidate)
 	var previous := version_parts(installed)
 	if next.is_empty() or previous.is_empty():
 		return false
-	for i in 3:
+	for i in 4:
 		if next[i] != previous[i]:
 			return next[i] > previous[i]
 	return false
 
-static func select_release(data: Variant, installed: String) -> Dictionary:
-	if not data is Dictionary or data.get("draft") != false or data.get("prerelease") != false:
+static func select_release(data: Variant, installed: String, selected_channel: String = "stable") -> Dictionary:
+	if selected_channel not in ["stable", "beta"]:
+		return {}
+	if data is Array:
+		var best: Dictionary = {}
+		for entry in data:
+			var candidate := select_release(entry, installed, selected_channel)
+			if not candidate.is_empty() and (best.is_empty() or is_newer(candidate.version, best.version)):
+				best = candidate
+		return best
+	if not data is Dictionary or data.get("draft") != false or data.get("prerelease") != (selected_channel == "beta"):
 		return {}
 	var tag = data.get("tag_name")
 	if not tag is String or not tag.begins_with("v") or not is_newer(tag.substr(1), installed):
+		return {}
+	if tag.ends_with("-beta") != (selected_channel == "beta"):
 		return {}
 	var filename: String = "OneMoreTry-%s-Windows-x64-Setup.exe" % tag
 	var assets = data.get("assets")
@@ -69,6 +92,27 @@ static func select_release(data: Variant, installed: String) -> Dictionary:
 		return {"version": tag.substr(1), "filename": filename, "sha256": checksum, "size": int(byte_count), "url": DOWNLOAD_BASE + tag + "/" + filename}
 	return {}
 
+func feed_url() -> String:
+	return BETA_URL if channel == "beta" else LATEST_URL
+
+func set_channel(value: String) -> bool:
+	if value not in ["stable", "beta"]:
+		return false
+	var settings := ConfigFile.new()
+	settings.set_value("updates", "channel", value)
+	if settings.save(settings_path) != OK:
+		request.cancel_request()
+		fail("설정을 저장하지 못했습니다.")
+		return false
+	request.cancel_request()
+	remove_partial()
+	release.clear()
+	installer_path = ""
+	request.download_file = ""
+	channel = value
+	set_status(State.IDLE, "업데이트")
+	return true
+
 func set_status(next: State, value: String) -> void:
 	state = next
 	message = value
@@ -79,27 +123,27 @@ func check_for_updates() -> void:
 		return
 	release.clear()
 	request.download_file = ""
-	request.body_size_limit = 2 * 1024 * 1024
+	request.body_size_limit = 16 * 1024 * 1024
 	request.timeout = 15
-	set_status(State.CHECKING, "GitHub에서 새 버전을 확인하고 있습니다.")
-	var error := request.request(LATEST_URL, ["Accept: application/vnd.github+json", "User-Agent: OneMoreTry/" + current_version, "X-GitHub-Api-Version: 2022-11-28"])
+	set_status(State.CHECKING, "업데이트 확인 중")
+	var error := request.request(feed_url(), ["Accept: application/vnd.github+json", "User-Agent: OneMoreTry/" + current_version, "X-GitHub-Api-Version: 2022-11-28"])
 	if error != OK:
-		fail("업데이트 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+		fail("연결하지 못했습니다. 다시 시도해 주세요.")
 
 func download_update() -> void:
 	if state != State.AVAILABLE:
 		return
 	if DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE_DIR)) != OK:
-		fail("업데이트를 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
+		fail("파일을 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
 		return
 	installer_path = CACHE_DIR.path_join(release.filename)
 	remove_partial()
 	request.download_file = installer_path + ".part"
 	request.body_size_limit = release.size
 	request.timeout = 300
-	set_status(State.DOWNLOADING, "설치 파일을 다운로드하고 있습니다.")
+	set_status(State.DOWNLOADING, "다운로드 중")
 	if request.request(release.url, ["User-Agent: OneMoreTry/" + current_version]) != OK:
-		fail("다운로드를 시작하지 못했습니다. 다시 시도해 주세요.")
+		fail("다운로드하지 못했습니다. 다시 시도해 주세요.")
 
 func _process(delta: float) -> void:
 	if state != State.DOWNLOADING:
@@ -107,7 +151,7 @@ func _process(delta: float) -> void:
 	progress_clock += delta
 	if progress_clock >= 0.2:
 		progress_clock = 0
-		message = "설치 파일 다운로드 중  %d%%" % clampi(int(100.0 * request.get_downloaded_bytes() / release.size), 0, 100)
+		message = "다운로드 %d%%" % clampi(int(100.0 * request.get_downloaded_bytes() / release.size), 0, 100)
 		changed.emit()
 
 func _completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -115,33 +159,35 @@ func _completed(result: int, response_code: int, _headers: PackedStringArray, bo
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
 		if state == State.CHECKING and response_code == 404:
-			set_status(State.CURRENT, "현재 받을 수 있는 새 정식 버전이 없습니다.")
+			set_status(State.CURRENT, "업데이트가 없습니다.")
 		else:
-			fail("업데이트를 받지 못했습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.")
+			fail("다운로드하지 못했습니다. 연결을 확인해 주세요.")
 		return
 	if state == State.CHECKING:
 		var parser := JSON.new()
 		var parse_error := parser.parse(body.get_string_from_utf8())
 		var data = parser.data if parse_error == OK else null
-		if not data is Dictionary or not data.get("tag_name") is String or version_parts(str(data.get("tag_name")).trim_prefix("v")).is_empty():
-			fail("업데이트 정보를 읽지 못했습니다. 잠시 후 다시 시도해 주세요.")
+		if (channel == "stable" and (not data is Dictionary or not data.get("tag_name") is String or version_parts(str(data.get("tag_name")).trim_prefix("v")).is_empty())) or (channel == "beta" and not data is Array):
+			fail("업데이트를 확인하지 못했습니다.")
 			return
-		release = select_release(data, current_version)
+		release = select_release(data, current_version, channel)
 		if not release.is_empty():
-			set_status(State.AVAILABLE, "새 버전 %s을 받을 수 있습니다.\n다운로드 후 설치하면 게임이 종료됩니다. 저장 기록은 유지됩니다." % release.version)
-		elif is_newer(str(data.tag_name).trim_prefix("v"), current_version):
-			fail("새 버전의 설치 파일이 아직 준비되지 않았습니다. 잠시 후 다시 확인해 주세요.")
+			set_status(State.AVAILABLE, "v%s 업데이트" % release.version)
+			if automatic_download:
+				download_update()
+		elif channel == "stable" and is_newer(str(data.tag_name).trim_prefix("v"), current_version):
+			fail("나중에 다시 확인해 주세요.")
 		else:
-			set_status(State.CURRENT, "최신 버전을 사용하고 있습니다. (v%s)" % current_version)
+			set_status(State.CURRENT, "업데이트가 없습니다. (v%s)" % current_version)
 		return
 	if not verify_installer(installer_path + ".part"):
-		fail("설치 파일 검증에 실패했습니다. 파일을 삭제했습니다. 다시 다운로드해 주세요.")
+		fail("파일이 손상되었습니다. 다시 다운로드해 주세요.")
 		return
 	var error := DirAccess.rename_absolute(ProjectSettings.globalize_path(installer_path + ".part"), ProjectSettings.globalize_path(installer_path))
 	if error != OK:
-		fail("설치 파일을 저장하지 못했습니다. 다시 시도해 주세요.")
+		fail("파일을 저장하지 못했습니다.")
 		return
-	set_status(State.READY, "v%s 다운로드와 검증을 마쳤습니다.\n설치 프로그램을 실행하고 게임을 종료합니다. 저장 기록은 유지됩니다." % release.version)
+	set_status(State.READY, "v%s 설치 준비 완료\n설치하면 게임이 종료됩니다." % release.version)
 
 func verify_installer(path: String) -> bool:
 	if release.is_empty():
@@ -159,10 +205,10 @@ func launch_installer() -> bool:
 	# Check again in case the downloaded file changed while the dialog was open.
 	if not verify_installer(installer_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(installer_path))
-		fail("설치 파일이 변경되었습니다. 다시 다운로드해 주세요.")
+		fail("파일이 변경되었습니다. 다시 다운로드해 주세요.")
 		return false
 	if OS.create_process(ProjectSettings.globalize_path(installer_path), []) <= 0:
-		fail("설치 프로그램을 실행하지 못했습니다. 다시 시도해 주세요.")
+		fail("설치 파일을 실행하지 못했습니다.")
 		return false
 	return true
 
@@ -171,7 +217,7 @@ func cancel() -> void:
 		return
 	request.cancel_request()
 	remove_partial()
-	set_status(State.IDLE, "업데이트를 취소했습니다. 나중에 다시 확인할 수 있습니다.")
+	set_status(State.IDLE, "취소했습니다.")
 
 func remove_partial() -> void:
 	if not installer_path.is_empty():

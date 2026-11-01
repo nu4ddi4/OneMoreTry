@@ -30,6 +30,12 @@ func set_music(on: bool) -> void:
 	elif not on:
 		bgm.stop()
 
+func set_effects(on: bool) -> void:
+	sfx_on = on
+	if not on:
+		for voice in voices:
+			voice.stop()
+
 func effect(key: String) -> void:
 	if not sfx_on:
 		return
