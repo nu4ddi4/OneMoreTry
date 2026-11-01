@@ -2,11 +2,13 @@
 
 쉬운 조작, 수상한 바닥, 빠른 재도전. Godot 4.6.3으로 만든 Windows용 2D 트랩 플랫포머입니다.
 
-**[Windows 다운로드](https://github.com/nu4ddi4/side-scroller-game/releases/latest)** · [기획안](docs/DESIGN.md) · [개발 및 브랜치 운영](docs/DEVELOPMENT.md) · [검증 결과](docs/VALIDATION.md)
+**[Windows 다운로드](https://github.com/nu4ddi4/side-scroller-game/releases/latest)** · [기획안](docs/DESIGN.md) · [함정 개편 설계](docs/TRAP_DESIGN.md) · [개발 및 브랜치 운영](docs/DEVELOPMENT.md) · [검증 결과](docs/VALIDATION.md)
 
 ![타이틀 화면](docs/images/title.png)
 
 ## 플레이
+
+beta에서는 창을 최대화한 상태로 시작하고, 게임 화면을 창 크기에 맞춰 비율을 유지하며 확대합니다. F11로 전체 화면에 들어갔다 나오면 이전 창 상태로 돌아갑니다. 월드의 안내 팻말과 비밀 길 설명은 제거했습니다. 새 함정 8종은 위 설계안에 정리했으며 아직 게임에 구현하지 않았습니다.
 
 릴리스의 **`OneMoreTry-v0.2.0-Windows-x64-Setup.exe`**를 실행하면 사용자 계정에 설치됩니다. 시작 메뉴에서 **One More Try!**를 실행하세요. 관리자 권한은 필요하지 않으며 바탕 화면 바로 가기는 설치 중 선택할 수 있습니다. 설치 없이 실행하려면 함께 제공하는 ZIP을 풀고 `OneMoreTry.exe`를 실행하세요. Godot이나 별도 런타임을 설치할 필요가 없습니다. Windows 10/11 64비트와 OpenGL 3.3 호환 그래픽 환경을 대상으로 합니다.
 
