@@ -32,6 +32,7 @@ godot --headless --editor --import --quit
 godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 python3 tools/test_updater.py
+godot --headless --script tests/display_tests.gd -- --test
 ```
 
 테스트는 별도 기록 파일을 사용해 실제 플레이 기록을 바꾸지 않습니다. 단위·시스템 검사는 상태 전이를 위해 위치를 직접 설정합니다. `playthrough.gd`는 시작 지점부터 실제 이동과 점프 입력만으로 노데스 클리어, 체크포인트 2개, 비밀 별 획득을 확인합니다.
@@ -52,16 +53,16 @@ godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
 Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WINDOWS.txt`를 `README.txt`로, 라이선스를 `licenses` 폴더에 복사한 뒤 컴파일합니다.
 
 ```powershell
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.1 /DBaseVersion=0.2.1 installer/OneMoreTry.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.2 /DBaseVersion=0.2.2 installer/OneMoreTry.iss
 ./tools/test_installer.ps1  # 일회용 Windows 테스트 환경에서만 실행: 테스트 기록을 생성합니다.
 ```
 
-결과는 `build/installer/OneMoreTry-v0.2.1-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
+결과는 `build/installer/OneMoreTry-v0.2.2-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
 
 `project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `feature/* → beta → main` PR 순서로 병합하면 두 브랜치 모두 검증 후 자동 릴리스합니다.
 
-- `beta`: `v0.2.1-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
-- `main`: `v0.2.1`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
+- `beta`: `v0.2.2-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
+- `main`: `v0.2.2`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
 - 같은 버전으로 다시 push하면 기존 공개 릴리스를 변경하지 않습니다. 새 배포에는 숫자 버전을 올립니다. PR 검사는 릴리스를 게시하지 않습니다.
 
 `Godot Windows` Actions는 회귀·전체 통과·실제 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 동일한 EXE와 설치 파일을 게시합니다. ZIP·Setup 각각 SHA-256 파일을 제공합니다. `tools/release_config.py`가 소스/Windows 버전 일치 여부를 검사하고 빌드 때만 채널 버전을 적용합니다. `release-info` artifact로 버전·채널·원본 커밋을 전달해 베타 파일의 정식 게시를 막습니다.
@@ -93,3 +94,9 @@ Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WI
 `scripts/sound.gd`, `tools/make_audio.py`: 자체 제작 칩튠 BGM과 효과음. `OneMoreSans.otf`는 SIL OFL의 Noto Sans CJK KR에서 한국어와 사용 문자를 추출한 폰트입니다.
 
 다음 작업은 스테이지 정보를 리소스로 분리하고 2~5 스테이지를 확장하는 것입니다. 이후 이동 장애물, 가짜 코인과 출구, 조건부 심리전 함정을 추가합니다. 현재 MVP의 기록은 스테이지 1개 기준입니다.
+
+## 화면 크기 검증
+
+960×540은 기준 설계 크기입니다. `canvas_items`·fractional·expand로 창을 채우며 넓은 화면에서는 가로 영역, 세로 비율이 큰 화면에서는 세로 영역을 확장합니다. 메뉴는 기준 영역을 중앙에 배치하고 HUD는 현재 논리 뷰포트 너비에 맞춥니다. 카메라 경계와 배경·지면 그림도 뷰포트 크기를 사용합니다. 물리 지형과 함정 좌표는 동일합니다.
+
+`tests/display_tests.gd`는 640×360~3840×2160의 10개 창 크기에서 여백·잘림·메뉴/HUD/기록/결과 위치·카메라 경계·업데이트 창 재배치를 검사합니다. 데스크톱 렌더 화면 캡처는 `-- --test --capture`, 창 관리자에서 F11 모드 복귀까지 검사할 때는 `-- --test --capture --window-modes`로 실행합니다. 캡처 폴더는 `build/display-audit`입니다. Windows CI는 설치·재설치·제거 외에 640×360과 3840×1080 크기로 배포 EXE를 기동합니다.

@@ -38,24 +38,30 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var left: float = game.camera.position.x - 480 if game and game.camera else 0.0
-	draw_rect(Rect2(left, 0, 960, 540), Color("b9dedb"))
-	draw_rect(Rect2(left, 200, 960, 180), Color("b0d7d1"))
+	var view_size := get_viewport_rect().size
+	var center: Vector2 = game.camera.position if game and game.camera else Vector2(480, 270)
+	var left := center.x - view_size.x / 2.0
+	var top := center.y - view_size.y / 2.0
+	# Include the camera shake margin so a resized window never exposes clear color.
+	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Color("b9dedb"))
+	draw_rect(Rect2(left - 8, 200, view_size.x + 16, 180), Color("b0d7d1"))
 	# All scenery uses a deliberately limited palette and integer pixel steps.
-	for i in range(-1, 8):
-		var x := left + fposmod(i * 221.0 - left * 0.13 + visual_time * 2, 1326) - 180
+	for i in range(-1, ceili(view_size.x / 221.0) + 2):
+		var x := left + i * 221.0 + fposmod(-left * 0.13 + visual_time * 2, 221.0) - 180
 		var y := 100 + (i % 3) * 33
 		cloud(Vector2(int(x), y), Color("edf0d4"))
 	for layer in range(3):
 		var spacing := 250.0 + layer * 80
-		for i in range(-1, 7):
-			var x := left + fposmod(i * spacing - left * (0.16 + layer * 0.12), spacing * 6) - spacing
+		for i in range(-1, ceili(view_size.x / spacing) + 2):
+			var x := left + i * spacing + fposmod(-left * (0.16 + layer * 0.12), spacing) - spacing
 			var y := 248 + layer * 37 + (i % 2) * 17
 			var tint: Color = [Color("9bc6bc"), Color("80b8a2"), Color("64a58e")][layer]
 			var points := PackedVector2Array([Vector2(x, 440), Vector2(x, y + 50), Vector2(x + 24, y + 50), Vector2(x + 24, y + 27), Vector2(x + 58, y + 27), Vector2(x + 58, y + 10), Vector2(x + 86, y + 10), Vector2(x + 86, y), Vector2(x + 140, y), Vector2(x + 140, y + 16), Vector2(x + 180, y + 16), Vector2(x + 180, y + 40), Vector2(x + spacing, y + 40), Vector2(x + spacing, 440)])
 			draw_colored_polygon(points, tint)
 	for rect in GROUNDS:
-		terrain(rect)
+		var extended: Rect2 = rect
+		extended.size.y = maxf(rect.size.y, top + view_size.y + 8 - rect.position.y)
+		terrain(extended)
 	for rect in LEDGES:
 		terrain(rect, true)
 	for i in range(36):
