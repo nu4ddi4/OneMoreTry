@@ -11,6 +11,7 @@ const INK := Color("203c40")
 const CREAM := Color("f4ecd4")
 const MINT := Color("84dfb7")
 const MUTED := Color("a2bcb3")
+const DESIGN_SIZE := Vector2(960, 540)
 
 enum Mode { MENU, PLAYING, PAUSED, CLEAR, RECORDS }
 var mode: Mode = Mode.MENU
@@ -46,6 +47,8 @@ var update_dialog: AcceptDialog
 var update_button: Button
 var update_channel: OptionButton
 var update_status: Label
+var version_label: Label
+var quit_dialog: ConfirmationDialog
 var mode_before_fullscreen: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
 
 func _ready() -> void:
@@ -71,7 +74,10 @@ func _ready() -> void:
 	player.jumped.connect(func(): sound.effect("jump"))
 	build_ui()
 	build_updater()
+	build_quit_dialog()
+	get_viewport().size_changed.connect(layout_screen)
 	show_menu()
+	layout_screen()
 	if OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode:
 		updater.automatic_download = true
 		updater.check_for_updates()
@@ -117,6 +123,17 @@ func build_updater() -> void:
 	update_dialog.close_requested.connect(updater.cancel)
 	update_dialog.confirmed.connect(confirm_update)
 	updater.changed.connect(refresh_update_ui)
+
+func build_quit_dialog() -> void:
+	quit_dialog = ConfirmationDialog.new()
+	quit_dialog.title = "종료"
+	quit_dialog.dialog_text = "기록을 저장하지 못했습니다."
+	quit_dialog.min_size = Vector2i(560, 180)
+	quit_dialog.theme = update_dialog.theme
+	quit_dialog.ok_button_text = "저장하지 않고 종료"
+	quit_dialog.cancel_button_text = "취소"
+	quit_dialog.confirmed.connect(func(): get_tree().quit())
+	add_child(quit_dialog)
 
 func confirm_update() -> void:
 	match updater.state:
@@ -208,7 +225,7 @@ func start_run() -> void:
 		trap.reset()
 	player.respawn(spawn_point)
 	player.enabled = true
-	camera.position = Vector2(480, 270)
+	camera.position = Vector2(camera_x(100), 270)
 	sound.quiet(false)
 	clear_overlay()
 	hud.show()
@@ -236,8 +253,8 @@ func _physics_process(delta: float) -> void:
 		update_hud()
 	player.enabled = mode == Mode.PLAYING
 	if mode == Mode.PLAYING or mode == Mode.CLEAR:
-		var target := clampf(player.position.x + 130, 480, TryWorld.LENGTH - 480)
-		camera.position.x = lerpf(camera.position.x, target, 1.0 - exp(-delta * 9))
+		var target := camera_x(player.position.x + 130)
+		camera.position.x = camera_x(lerpf(camera.position.x, target, 1.0 - exp(-delta * 9)))
 		camera.position.y = 270
 
 func _process(delta: float) -> void:
@@ -268,6 +285,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			mode_before_fullscreen = window_mode
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	elif update_dialog.visible or quit_dialog.visible:
+		return
 	elif event.is_action_pressed("mute"):
 		records.data.muted = not records.data.muted
 		apply_audio_settings()
@@ -290,9 +309,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if records:
-			save_records()
-		get_tree().quit()
+		quit_game()
 
 func on_death(_reason: String) -> void:
 	run_deaths += 1
@@ -308,7 +325,7 @@ func respawn() -> void:
 		trap.reset()
 	player.respawn(spawn_point)
 	respawn_timer = 0
-	camera.position.x = clampf(spawn_point.x + 130, 480, TryWorld.LENGTH - 480)
+	camera.position.x = camera_x(spawn_point.x + 130)
 
 func activate_checkpoint(index: int) -> void:
 	checkpoint_index = index
@@ -328,15 +345,43 @@ func finish_run() -> void:
 	records.data.clears += 1
 	if run_deaths == 0:
 		records.data.no_death = true
-	save_records()
+	if save_records():
+		toast_clock = 0
 	sound.quiet(true)
 	sound.effect("clear")
-	toast_clock = 0
 	show_clear()
 
-func save_records() -> void:
-	if not records.save() and toast_label:
+func save_records() -> bool:
+	if records.save():
+		return true
+	if toast_label:
 		toast(records.last_error, 4)
+	return false
+
+func camera_x(value: float) -> float:
+	var half_width := minf(get_viewport_rect().size.x / 2.0, TryWorld.LENGTH / 2.0)
+	return clampf(value, half_width, TryWorld.LENGTH - half_width)
+
+func layout_screen() -> void:
+	var visible_size := get_viewport_rect().size
+	ui.position = (visible_size - DESIGN_SIZE) / 2.0
+	ui.size = DESIGN_SIZE
+	hud.position = -ui.position
+	hud.size = visible_size
+	toast_label.position.y = 105 - ui.position.y
+	if is_instance_valid(version_label):
+		version_label.position = Vector2(65, visible_size.y - 32) - ui.position
+	if is_instance_valid(update_button):
+		update_button.position = visible_size - Vector2(225, 68) - ui.position
+	if mode in [Mode.MENU, Mode.RECORDS]:
+		camera.position.x = camera_x(100)
+	else:
+		camera.position.x = camera_x(camera.position.x)
+	if update_dialog.visible:
+		update_dialog.position = Vector2i((visible_size - Vector2(update_dialog.size)) / 2.0)
+	if quit_dialog.visible:
+		quit_dialog.position = Vector2i((visible_size - Vector2(quit_dialog.size)) / 2.0)
+	update_hud()
 
 func toast(message: String, duration: float = 2.0) -> void:
 	toast_label.text = message
@@ -409,24 +454,36 @@ func build_ui() -> void:
 	layer.layer = 10
 	add_child(layer)
 	ui = Control.new()
-	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.size = DESIGN_SIZE
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(ui)
 	hud = Control.new()
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(hud)
-	panel(hud, Vector2(20, 18), Vector2(920, 62), Color("203c40f2"))
+	hud.size = DESIGN_SIZE
+	var hud_panel := panel(hud, Vector2(20, 18), Vector2(920, 62), Color("203c40f2"))
+	hud_panel.set_anchor(SIDE_RIGHT, 1.0)
+	hud_panel.offset_right = -20
 	text(hud, "01", Vector2(38, 27), Vector2(36, 36), 25, MINT)
 	text(hud, "초원", Vector2(87, 34), Vector2(180, 30), 20)
 	checkpoint_label = text(hud, "", Vector2(330, 34), Vector2(230, 30), 14, MUTED)
 	death_label = text(hud, "", Vector2(595, 30), Vector2(145, 35), 19)
 	time_label = text(hud, "", Vector2(762, 30), Vector2(150, 35), 19, MINT)
+	for entry in [death_label, time_label]:
+		var left_offset: float = entry.position.x - DESIGN_SIZE.x
+		var right_offset: float = left_offset + entry.size.x
+		entry.set_anchor(SIDE_LEFT, 1.0)
+		entry.set_anchor(SIDE_RIGHT, 1.0)
+		entry.offset_left = left_offset
+		entry.offset_right = right_offset
 	var track := ColorRect.new()
 	track.position = Vector2(21, 78)
 	track.size = Vector2(918, 3)
 	track.color = Color("395850")
 	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(track)
+	track.set_anchor(SIDE_RIGHT, 1.0)
+	track.offset_right = -21
 	progress = ColorRect.new()
 	progress.size = Vector2(0, 3)
 	progress.color = MINT
@@ -450,7 +507,7 @@ func update_hud() -> void:
 	death_label.text = "사망  %03d" % run_deaths
 	time_label.text = format_time(elapsed)
 	checkpoint_label.text = "체크포인트  %d / 2" % (checkpoint_index + 1)
-	progress.size.x = clampf((player.position.x - 100) / (TryWorld.GOAL - 100), 0, 1) * 918
+	progress.size.x = clampf((player.position.x - 100) / (TryWorld.GOAL - 100), 0, 1) * progress.get_parent().size.x
 
 static func format_time(seconds: float) -> String:
 	var centis := int(seconds * 100)
@@ -461,7 +518,7 @@ func show_menu() -> void:
 	particles.clear()
 	player.enabled = false
 	player.respawn(Vector2(100, 416))
-	camera.position = Vector2(480, 270)
+	camera.position = Vector2(camera_x(100), 270)
 	camera.offset = Vector2.ZERO
 	checkpoint_index = -1
 	for trap in traps:
@@ -479,7 +536,8 @@ func show_menu() -> void:
 	if OS.get_name() == "Windows":
 		update_button = button(overlay, "업데이트", Vector2(735, 472), Vector2(160, 36), show_updates)
 		refresh_update_ui()
-	text(overlay, "v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(100, 18), 10, Color("b5c4a2"))
+	version_label = text(overlay, "v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(180, 18), 10, Color("b5c4a2"))
+	layout_screen()
 	start.grab_focus()
 	if not records.last_error.is_empty():
 		toast(records.last_error, 5)
@@ -549,5 +607,8 @@ func show_records() -> void:
 	back.grab_focus()
 
 func quit_game() -> void:
-	save_records()
-	get_tree().quit()
+	if save_records():
+		get_tree().quit()
+	else:
+		quit_dialog.popup_centered(Vector2i(560, 180))
+		quit_dialog.get_cancel_button().grab_focus()
