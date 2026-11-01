@@ -16,14 +16,18 @@ class Fixture(BaseHTTPRequestHandler):
     def do_GET(self):
         status = 200
         body = PAYLOAD
-        if self.path in ("/metadata", "/betas"):
+        if self.path in ("/metadata", "/betas", "/beta-incomplete"):
             body = json.dumps({
                 "tag_name": "v0.3.0", "draft": False, "prerelease": False,
                 "assets": [{"name": "OneMoreTry-v0.3.0-Windows-x64-Setup.exe",
                             "size": len(PAYLOAD),
                             "digest": "sha256:" + hashlib.sha256(PAYLOAD).hexdigest()}],
             }).encode()
-            if self.path == "/betas":
+            if self.path == "/beta-incomplete":
+                entry = json.loads(body)
+                entry.update(tag_name='v0.6.0-beta', prerelease=True, assets=[])
+                body = json.dumps([entry]).encode()
+            elif self.path == "/betas":
                 entries = []
                 for version in ("0.4.0-beta", "0.5.0", "0.5.0-beta", "0.6.0-beta"):
                     entry = json.loads(body)

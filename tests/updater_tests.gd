@@ -117,6 +117,8 @@ func run() -> void:
 		check(updater.release.is_empty() and updater.installer_path.is_empty() and not updater.launch_installer(), "Old-channel staged installer cannot launch after switching")
 		await fetch_metadata("/betas")
 		check(updater.release.get("version") == "0.5.0-beta", "Real HTTP beta list skips drafts and stable entries")
+		await fetch_metadata("/beta-incomplete")
+		check(updater.state == Updater.State.FAILED, "Missing beta installer is a retryable failure rather than no update")
 		updater.current_version = "0.5.0-beta"
 		updater.set_channel("stable")
 		await fetch_metadata("/metadata")
@@ -135,12 +137,20 @@ func run() -> void:
 			updater.release = selected.duplicate()
 			updater.release.filename = "test-updater.exe"
 			updater.release.url = fixture_url + endpoint
+			if endpoint == "/installer":
+				var stale := FileAccess.open("user://updates/test-updater.exe", FileAccess.WRITE)
+				stale.store_string("x".repeat(PAYLOAD.length()))
+				stale.close()
 			updater.set_status(Updater.State.AVAILABLE, "test")
 			updater.download_update()
 			await wait_for_request()
 			if endpoint == "/installer":
 				check(updater.state == Updater.State.READY and updater.verify_installer(updater.installer_path), "Real download is verified and staged for explicit install")
 				check(not updater.launch_installer(), "Linux tests never execute a Windows installer")
+				updater.release.url = fixture_url + "/missing"
+				updater.set_status(Updater.State.AVAILABLE, "test")
+				updater.download_update()
+				check(updater.state == Updater.State.READY, "A verified cached installer is reused without another network request")
 				DirAccess.remove_absolute(ProjectSettings.globalize_path(updater.installer_path))
 			else:
 				check(updater.state == Updater.State.FAILED, "Reject bad downloaded bytes: " + endpoint)
