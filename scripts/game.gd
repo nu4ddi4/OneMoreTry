@@ -101,7 +101,7 @@ func confirm_update() -> void:
 			updater.download_update()
 		TryUpdater.State.READY:
 			if not records.save():
-				updater.fail("기록을 저장하지 못했습니다. 설치 전에 저장 공간을 확인해 주세요.")
+				updater.fail("기록을 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
 			elif updater.launch_installer():
 				get_tree().quit()
 		_:
@@ -125,7 +125,7 @@ func refresh_update_ui() -> void:
 		_:
 			action.text = "다시 확인"
 	if is_instance_valid(update_button):
-		update_button.text = "새 버전 받기" if updater.state in [TryUpdater.State.AVAILABLE, TryUpdater.State.READY] else "업데이트 확인"
+		update_button.text = "새 버전" if updater.state in [TryUpdater.State.AVAILABLE, TryUpdater.State.READY] else "업데이트"
 
 func configure_input() -> void:
 	var bindings := {"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "jump": [KEY_SPACE], "retry": [KEY_R], "pause_game": [KEY_ESCAPE], "fullscreen": [KEY_F11], "mute": [KEY_M]}
@@ -169,6 +169,8 @@ func interaction_enabled() -> bool:
 
 func start_run() -> void:
 	mode = Mode.PLAYING
+	toast_clock = 0
+	toast_label.hide()
 	checkpoint_index = -1
 	spawn_point = Vector2(100, 416)
 	elapsed = 0
@@ -186,7 +188,6 @@ func start_run() -> void:
 	sound.quiet(false)
 	clear_overlay()
 	hud.show()
-	toast("01  튜토리얼?  ·  쉬워 보인다고 방심하지 마세요.", 3.0)
 	update_hud()
 
 func _physics_process(delta: float) -> void:
@@ -206,7 +207,6 @@ func _physics_process(delta: float) -> void:
 				save_records()
 				sound.effect("secret")
 				burst(TryWorld.SECRET, MINT, 20)
-				toast("숨겨진 별 발견!  ·  의심 많은 모험가", 3)
 			if player.position.x >= TryWorld.GOAL - 12 and player.position.y <= 420 and player.position.y >= 350:
 				finish_run()
 		update_hud()
@@ -259,7 +259,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mode == Mode.RECORDS:
 			show_menu()
 	elif event.is_action_pressed("retry") and mode == Mode.PLAYING and player.alive:
-		player.die("좋아요. 바로 한 번 더!")
+		player.die("retry")
 		respawn_timer = 0.0
 	elif event.is_action_pressed("jump") and mode == Mode.MENU:
 		start_run()
@@ -270,7 +270,7 @@ func _notification(what: int) -> void:
 			save_records()
 		get_tree().quit()
 
-func on_death(reason: String) -> void:
+func on_death(_reason: String) -> void:
 	run_deaths += 1
 	records.data.deaths += 1
 	save_records()
@@ -278,8 +278,6 @@ func on_death(reason: String) -> void:
 	shake = 4.0
 	sound.effect("death")
 	burst(player.position + Vector2(0, -16), MINT, 18)
-	var milestone: Dictionary = {1: "처음이니까 봐드립니다.", 10: "이제 익숙해지셨죠?", 30: "이 정도면 외우실 때도 됐는데...", 50: "여기까지 온 것도 실력입니다.", 100: "제작자도 이렇게까지는 예상 못 했습니다."}
-	toast(milestone.get(int(records.data.deaths), reason), 2.5)
 
 func respawn() -> void:
 	for trap in traps:
@@ -293,7 +291,6 @@ func activate_checkpoint(index: int) -> void:
 	spawn_point = TryWorld.CHECKPOINTS[index] + Vector2(24, 0)
 	sound.effect("checkpoint")
 	burst(TryWorld.CHECKPOINTS[index] + Vector2(5, -55), Color("f5d68a"), 15)
-	toast("체크포인트 %d  ·  이제 여기서 다시 시작합니다." % (index + 1), 2.4)
 
 func finish_run() -> void:
 	if mode != Mode.PLAYING:
@@ -396,8 +393,7 @@ func build_ui() -> void:
 	ui.add_child(hud)
 	panel(hud, Vector2(20, 18), Vector2(920, 62), Color("203c40f2"))
 	text(hud, "01", Vector2(38, 27), Vector2(36, 36), 25, MINT)
-	text(hud, "튜토리얼?", Vector2(87, 26), Vector2(180, 25), 20)
-	text(hud, "MEADOW MISCHIEF", Vector2(88, 53), Vector2(180, 15), 10, MUTED)
+	text(hud, "초원", Vector2(87, 34), Vector2(180, 30), 20)
 	checkpoint_label = text(hud, "", Vector2(330, 34), Vector2(230, 30), 14, MUTED)
 	death_label = text(hud, "", Vector2(595, 30), Vector2(145, 35), 19)
 	time_label = text(hud, "", Vector2(762, 30), Vector2(150, 35), 19, MINT)
@@ -412,9 +408,6 @@ func build_ui() -> void:
 	progress.color = MINT
 	progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	track.add_child(progress)
-	panel(hud, Vector2(20, 490), Vector2(920, 31), Color("203c40e8"))
-	text(hud, "A / D  이동     SPACE  점프     R  재도전", Vector2(34, 495), Vector2(550, 20), 11, MUTED)
-	text(hud, "ESC  일시정지     M  음소거     F11  전체 화면", Vector2(598, 495), Vector2(330, 20), 11, MUTED)
 	toast_label = text(ui, "", Vector2(140, 105), Vector2(680, 38), 15, INK)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -430,9 +423,9 @@ func clear_overlay() -> void:
 		child.queue_free()
 
 func update_hud() -> void:
-	death_label.text = "실패  %03d" % run_deaths
+	death_label.text = "사망  %03d" % run_deaths
 	time_label.text = format_time(elapsed)
-	checkpoint_label.text = "CHECKPOINT  %d / 2" % (checkpoint_index + 1)
+	checkpoint_label.text = "체크포인트  %d / 2" % (checkpoint_index + 1)
 	progress.size.x = clampf((player.position.x - 100) / (TryWorld.GOAL - 100), 0, 1) * 918
 
 static func format_time(seconds: float) -> String:
@@ -453,24 +446,16 @@ func show_menu() -> void:
 	toast_clock = 0
 	sound.quiet(false)
 	clear_overlay()
-	var card := panel(overlay, Vector2(64, 64), Vector2(832, 309))
-	text(card, "A LITTLE PLATFORMER. A LOT OF SECOND CHANCES.", Vector2(32, 22), Vector2(720, 20), 11, MINT)
-	text(card, "한 번만 더!", Vector2(27, 48), Vector2(500, 87), 57)
-	text(card, "ONE MORE TRY!", Vector2(33, 139), Vector2(400, 28), 21, MINT)
-	text(card, "쉬운 조작. 수상한 바닥. 그리고 빠른 재도전.", Vector2(33, 179), Vector2(510, 28), 16, MUTED)
-	var start := button(card, "도전하기  →", Vector2(32, 233), Vector2(208, 48), start_run, true)
-	button(card, "내 기록", Vector2(252, 233), Vector2(104, 48), show_records)
-	button(card, "종료", Vector2(368, 233), Vector2(80, 48), quit_game)
+	var card := panel(overlay, Vector2(220, 128), Vector2(520, 280))
+	var title := text(card, "한 번만 더!", Vector2(24, 25), Vector2(472, 80), 52)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var start := button(card, "시작", Vector2(40, 141), Vector2(440, 48), start_run, true)
+	button(card, "기록", Vector2(40, 203), Vector2(214, 40), show_records)
+	button(card, "종료", Vector2(266, 203), Vector2(214, 40), quit_game)
 	if OS.get_name() == "Windows":
-		update_button = button(overlay, "업데이트 확인", Vector2(735, 392), Vector2(160, 36), show_updates)
+		update_button = button(overlay, "업데이트", Vector2(735, 472), Vector2(160, 36), show_updates)
 		refresh_update_ui()
-	panel(card, Vector2(573, 58), Vector2(225, 223), Color("2d4b48"))
-	text(card, "첫 번째 도전", Vector2(592, 76), Vector2(180, 23), 13, MINT)
-	text(card, "01  튜토리얼?", Vector2(592, 111), Vector2(200, 32), 23)
-	text(card, "초원 · 체크포인트 2개\n함정 3종 · 숨겨진 길 1개", Vector2(592, 154), Vector2(200, 52), 13, MUTED)
-	text(card, "실패해도, 0.5초면 다시.", Vector2(592, 234), Vector2(200, 24), 13, Color("f5ce95"))
-	text(overlay, "A / D 또는 ← →  이동     SPACE  점프 / 시작     F11  전체 화면", Vector2(64, 472), Vector2(830, 28), 13, CREAM)
-	text(overlay, "WINDOWS  /  v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(400, 18), 10, Color("b5c4a2"))
+	text(overlay, "v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(100, 18), 10, Color("b5c4a2"))
 	start.grab_focus()
 	if not records.last_error.is_empty():
 		toast(records.last_error, 5)
@@ -481,22 +466,24 @@ func pause_game() -> void:
 	sound.quiet(true)
 	clear_overlay()
 	var card := panel(overlay, Vector2(270, 138), Vector2(420, 315))
-	text(card, "잠깐, 숨 고르기.", Vector2(30, 22), Vector2(365, 42), 29)
-	text(card, "시간과 함정도 함께 멈춥니다.", Vector2(30, 73), Vector2(360, 24), 14, MUTED)
-	var resume := button(card, "계속하기  →", Vector2(30, 115), Vector2(360, 43), resume_game, true)
-	button(card, "처음부터 재도전", Vector2(30, 169), Vector2(174, 40), start_run)
-	button(card, "타이틀로", Vector2(216, 169), Vector2(174, 40), show_menu)
-	button(card, "음악 " + ("켜짐" if records.data.music else "꺼짐"), Vector2(30, 225), Vector2(174, 36), func():
+	text(card, "일시정지", Vector2(30, 22), Vector2(365, 42), 29)
+	if records.data.muted:
+		text(card, "음소거", Vector2(300, 34), Vector2(90, 24), 13, MUTED)
+	var resume := button(card, "계속", Vector2(30, 90), Vector2(360, 43), resume_game, true)
+	button(card, "처음부터", Vector2(30, 144), Vector2(174, 40), start_run)
+	button(card, "메뉴", Vector2(216, 144), Vector2(174, 40), show_menu)
+	button(card, "음악 " + ("켜짐" if records.data.music else "꺼짐"), Vector2(30, 200), Vector2(174, 36), func():
 		records.data.music = not records.data.music
 		apply_audio_settings()
 		save_records()
 		pause_game())
-	button(card, "효과음 " + ("켜짐" if records.data.sfx else "꺼짐"), Vector2(216, 225), Vector2(174, 36), func():
+	button(card, "효과음 " + ("켜짐" if records.data.sfx else "꺼짐"), Vector2(216, 200), Vector2(174, 36), func():
 		records.data.sfx = not records.data.sfx
 		apply_audio_settings()
 		save_records()
 		pause_game())
-	text(card, "전체 음소거 중  ·  M 해제  /  ESC 계속하기" if records.data.muted else "ESC  계속하기", Vector2(30, 279), Vector2(360, 20), 11, MUTED)
+	text(card, "A / D  이동   SPACE  점프   R  다시하기", Vector2(30, 252), Vector2(360, 20), 11, MUTED)
+	text(card, "ESC  계속   M  음소거   F11  전체 화면", Vector2(30, 276), Vector2(360, 20), 11, MUTED)
 	resume.grab_focus()
 
 func resume_game() -> void:
@@ -507,32 +494,29 @@ func resume_game() -> void:
 
 func show_clear() -> void:
 	clear_overlay()
-	var card := panel(overlay, Vector2(235, 118), Vector2(490, 336))
-	text(card, "STAGE 01  /  CLEAR", Vector2(30, 20), Vector2(420, 23), 13, MINT)
-	text(card, "결국, 해냈네요!", Vector2(27, 52), Vector2(440, 53), 36)
-	text(card, "처음에는 억울했지만, 이제는 내 실력.", Vector2(30, 112), Vector2(430, 28), 15, MUTED)
-	text(card, "클리어 시간", Vector2(31, 161), Vector2(210, 24), 13, MUTED)
-	text(card, format_time(elapsed), Vector2(31, 187), Vector2(230, 39), 27)
-	text(card, "이번 도전의 실패", Vector2(279, 161), Vector2(180, 24), 13, MUTED)
-	text(card, "%d회" % run_deaths, Vector2(279, 187), Vector2(180, 39), 27, MINT)
-	var badge := "개인 최고 기록!" if new_best else "최고 기록  " + format_time(records.data.best_time)
+	var card := panel(overlay, Vector2(235, 120), Vector2(490, 300))
+	text(card, "클리어", Vector2(30, 24), Vector2(430, 52), 36)
+	text(card, "시간", Vector2(31, 98), Vector2(210, 24), 13, MUTED)
+	text(card, format_time(elapsed), Vector2(31, 126), Vector2(230, 39), 27)
+	text(card, "사망", Vector2(279, 98), Vector2(180, 24), 13, MUTED)
+	text(card, "%d회" % run_deaths, Vector2(279, 126), Vector2(180, 39), 27, MINT)
+	var badge := "최고 기록" if new_best else "최고 기록  " + format_time(records.data.best_time)
 	if run_deaths == 0:
-		badge += "  ·  노데스!"
+		badge += "  ·  무사망"
 	if secret_collected:
-		badge += "  ·  비밀 발견"
-	text(card, badge, Vector2(31, 231), Vector2(438, 25), 13, Color("f5ce95"))
-	var again := button(card, "한 번만 더!", Vector2(30, 275), Vector2(241, 40), start_run, true)
-	button(card, "타이틀로", Vector2(283, 275), Vector2(177, 40), show_menu)
+		badge += "  ·  별"
+	text(card, badge, Vector2(31, 190), Vector2(438, 25), 13, Color("f5ce95"))
+	var again := button(card, "다시하기", Vector2(30, 236), Vector2(241, 40), start_run, true)
+	button(card, "메뉴", Vector2(283, 236), Vector2(177, 40), show_menu)
 	again.grab_focus()
 
 func show_records() -> void:
 	mode = Mode.RECORDS
 	clear_overlay()
 	var card := panel(overlay, Vector2(235, 76), Vector2(490, 368))
-	text(card, "MY LITTLE ACHIEVEMENTS", Vector2(30, 20), Vector2(430, 22), 11, MINT)
-	text(card, "도전의 흔적", Vector2(27, 51), Vector2(435, 50), 34)
-	var values := ["최단 클리어", "도전 / 클리어", "총 실패", "노데스 클리어", "숨겨진 별"]
-	var stats := [format_time(records.data.best_time) if records.data.best_time > 0 else "아직 도전 중", "%d / %d" % [records.data.attempts, records.data.clears], "%d회" % records.data.deaths, "달성!" if records.data.no_death else "다음 도전에서!", "발견!" if records.data.secret else "아직은 비밀"]
+	text(card, "기록", Vector2(30, 45), Vector2(430, 50), 34)
+	var values := ["최고 기록", "시작 / 클리어", "사망", "무사망 클리어", "별"]
+	var stats := [format_time(records.data.best_time) if records.data.best_time > 0 else "—", "%d / %d" % [records.data.attempts, records.data.clears], "%d회" % records.data.deaths, "달성" if records.data.no_death else "—", "획득" if records.data.secret else "—"]
 	for i in range(5):
 		text(card, values[i], Vector2(32, 118 + i * 33), Vector2(230, 26), 14, MUTED)
 		var value := text(card, stats[i], Vector2(250, 118 + i * 33), Vector2(206, 26), 15)
