@@ -41,7 +41,11 @@ func save() -> bool:
 		return false
 	file.store_string(JSON.stringify(data, "\t", true, true))
 	file.flush()
+	var write_error := file.get_error()
 	file.close()
+	if write_error != OK:
+		last_error = "기록을 저장하지 못했습니다. 저장 공간을 확인해 주세요."
+		return false
 	var result := DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
 	if result != OK:
 		last_error = "기록을 저장하지 못했습니다."

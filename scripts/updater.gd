@@ -55,9 +55,24 @@ static func is_newer(candidate: String, installed: String) -> bool:
 			return next[i] > previous[i]
 	return false
 
+static func release_version(data: Variant, selected_channel: String) -> String:
+	if selected_channel not in ["stable", "beta"] or not data is Dictionary or data.get("draft") != false or data.get("prerelease") != (selected_channel == "beta"):
+		return ""
+	var tag = data.get("tag_name")
+	if not tag is String or not tag.begins_with("v") or version_parts(tag.substr(1)).is_empty() or tag.ends_with("-beta") != (selected_channel == "beta"):
+		return ""
+	return tag.substr(1)
+
+static func newest_version(data: Variant, selected_channel: String) -> String:
+	var best := ""
+	var entries: Array = data if data is Array else [data]
+	for entry in entries:
+		var candidate := release_version(entry, selected_channel)
+		if not candidate.is_empty() and (best.is_empty() or is_newer(candidate, best)):
+			best = candidate
+	return best
+
 static func select_release(data: Variant, installed: String, selected_channel: String = "stable") -> Dictionary:
-	if selected_channel not in ["stable", "beta"]:
-		return {}
 	if data is Array:
 		var best: Dictionary = {}
 		for entry in data:
@@ -65,13 +80,10 @@ static func select_release(data: Variant, installed: String, selected_channel: S
 			if not candidate.is_empty() and (best.is_empty() or is_newer(candidate.version, best.version)):
 				best = candidate
 		return best
-	if not data is Dictionary or data.get("draft") != false or data.get("prerelease") != (selected_channel == "beta"):
+	var version := release_version(data, selected_channel)
+	if not is_newer(version, installed):
 		return {}
-	var tag = data.get("tag_name")
-	if not tag is String or not tag.begins_with("v") or not is_newer(tag.substr(1), installed):
-		return {}
-	if tag.ends_with("-beta") != (selected_channel == "beta"):
-		return {}
+	var tag := "v" + version
 	var filename: String = "OneMoreTry-%s-Windows-x64-Setup.exe" % tag
 	var assets = data.get("assets")
 	if not assets is Array:
@@ -138,6 +150,9 @@ func download_update() -> void:
 		return
 	installer_path = CACHE_DIR.path_join(release.filename)
 	remove_partial()
+	if verify_installer(installer_path):
+		mark_ready()
+		return
 	request.download_file = installer_path + ".part"
 	request.body_size_limit = release.size
 	request.timeout = 300
@@ -175,7 +190,7 @@ func _completed(result: int, response_code: int, _headers: PackedStringArray, bo
 			set_status(State.AVAILABLE, "v%s 업데이트" % release.version)
 			if automatic_download:
 				download_update()
-		elif channel == "stable" and is_newer(str(data.tag_name).trim_prefix("v"), current_version):
+		elif is_newer(newest_version(data, channel), current_version):
 			fail("나중에 다시 확인해 주세요.")
 		else:
 			set_status(State.CURRENT, "업데이트가 없습니다. (v%s)" % current_version)
@@ -183,10 +198,16 @@ func _completed(result: int, response_code: int, _headers: PackedStringArray, bo
 	if not verify_installer(installer_path + ".part"):
 		fail("파일이 손상되었습니다. 다시 다운로드해 주세요.")
 		return
+	if FileAccess.file_exists(installer_path) and DirAccess.remove_absolute(ProjectSettings.globalize_path(installer_path)) != OK:
+		fail("파일을 저장하지 못했습니다.")
+		return
 	var error := DirAccess.rename_absolute(ProjectSettings.globalize_path(installer_path + ".part"), ProjectSettings.globalize_path(installer_path))
 	if error != OK:
 		fail("파일을 저장하지 못했습니다.")
 		return
+	mark_ready()
+
+func mark_ready() -> void:
 	set_status(State.READY, "v%s 설치 준비 완료\n설치하면 게임이 종료됩니다." % release.version)
 
 func verify_installer(path: String) -> bool:
