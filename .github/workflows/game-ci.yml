@@ -69,6 +69,8 @@ jobs:
         run: godot --headless --editor --import --quit
       - name: Physics and save regression tests
         run: godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
+      - name: Resolution, UI bounds and dialog resize regression tests
+        run: godot --headless --script tests/display_tests.gd -- --test
       - name: Full stage traversal with normal inputs
         run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
       - name: Update metadata, real HTTP download, verification and cancellation
@@ -122,12 +124,16 @@ jobs:
       - name: Launch the exported exe on native Windows
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath ./build/windows/OneMoreTry.exe -ArgumentList '--headless','--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput native-stdout.log -RedirectStandardError native-stderr.log
-          Get-Content native-stdout.log
-          Get-Content native-stderr.log
-          if ($process.ExitCode -ne 0) { throw "Game exited with $($process.ExitCode)" }
-          $errors = Select-String -Path native-stdout.log,native-stderr.log -Pattern 'SCRIPT ERROR|ERROR:'
-          if ($errors) { throw "Godot reported runtime errors: $errors" }
+          foreach ($resolution in @('640x360', '3840x1080')) {
+            $stdout = "native-$resolution-stdout.log"
+            $stderr = "native-$resolution-stderr.log"
+            $process = Start-Process -FilePath ./build/windows/OneMoreTry.exe -ArgumentList '--headless','--windowed','--resolution',$resolution,'--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Get-Content $stdout
+            Get-Content $stderr
+            if ($process.ExitCode -ne 0) { throw "Game at $resolution exited with $($process.ExitCode)" }
+            $errors = Select-String -Path $stdout,$stderr -Pattern 'SCRIPT ERROR|ERROR:'
+            if ($errors) { throw "Godot reported runtime errors at ${resolution}: $errors" }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: OneMoreTry-Windows-installer
