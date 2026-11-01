@@ -44,6 +44,8 @@ var test_mode := false
 var updater: TryUpdater
 var update_dialog: AcceptDialog
 var update_button: Button
+var update_channel: OptionButton
+var update_status: Label
 var mode_before_fullscreen: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
 
 func _ready() -> void:
@@ -71,6 +73,7 @@ func _ready() -> void:
 	build_updater()
 	show_menu()
 	if OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode:
+		updater.automatic_download = true
 		updater.check_for_updates()
 	get_window().focus_exited.connect(func():
 		if mode == Mode.PLAYING and not test_mode:
@@ -78,18 +81,38 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 
 func build_updater() -> void:
-	updater = UpdaterScript.new()
+	updater = UpdaterScript.new(test_mode)
 	add_child(updater)
 	update_dialog = AcceptDialog.new()
 	update_dialog.title = "업데이트"
-	update_dialog.dialog_autowrap = true
 	update_dialog.dialog_hide_on_ok = false
-	update_dialog.min_size = Vector2i(560, 180)
+	update_dialog.min_size = Vector2i(560, 220)
 	var dialog_theme := Theme.new()
 	dialog_theme.default_font = font
 	dialog_theme.default_font_size = 17
 	update_dialog.theme = dialog_theme
 	add_child(update_dialog)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 20)
+	update_dialog.add_child(content)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	content.add_child(row)
+	var channel_label := Label.new()
+	channel_label.text = "채널"
+	row.add_child(channel_label)
+	update_channel = OptionButton.new()
+	update_channel.add_item("정식")
+	update_channel.add_item("베타")
+	update_channel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(update_channel)
+	update_channel.item_selected.connect(func(index: int):
+		if updater.set_channel("stable" if index == 0 else "beta"):
+			updater.check_for_updates())
+	update_status = Label.new()
+	update_status.custom_minimum_size = Vector2(520, 60)
+	update_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(update_status)
 	update_dialog.add_cancel_button("닫기").pressed.connect(updater.cancel)
 	update_dialog.close_requested.connect(updater.cancel)
 	update_dialog.confirmed.connect(confirm_update)
@@ -109,12 +132,13 @@ func confirm_update() -> void:
 
 func show_updates() -> void:
 	refresh_update_ui()
-	update_dialog.popup_centered(Vector2i(560, 180))
+	update_dialog.popup_centered(Vector2i(560, 220))
 	if updater.state in [TryUpdater.State.IDLE, TryUpdater.State.FAILED, TryUpdater.State.CURRENT]:
 		updater.check_for_updates()
 
 func refresh_update_ui() -> void:
-	update_dialog.dialog_text = updater.message
+	update_status.text = updater.message
+	update_channel.select(1 if updater.channel == "beta" else 0)
 	var action := update_dialog.get_ok_button()
 	action.disabled = updater.state in [TryUpdater.State.CHECKING, TryUpdater.State.DOWNLOADING]
 	match updater.state:
