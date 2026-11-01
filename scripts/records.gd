@@ -20,7 +20,7 @@ func load_records() -> void:
 	var error := parser.parse(FileAccess.get_file_as_string(path))
 	var loaded = parser.data if error == OK else null
 	if not loaded is Dictionary or loaded.get("version", 0) != 1:
-		last_error = "기록 파일을 읽지 못했습니다. 이번 기록은 새로 저장합니다."
+		last_error = "기록을 불러오지 못했습니다."
 		return
 	for key in ["deaths", "attempts", "clears"]:
 		var value = loaded.get(key)
@@ -37,14 +37,14 @@ func load_records() -> void:
 func save() -> bool:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:
-		last_error = "기록 저장 실패: 저장 폴더를 확인해 주세요."
+		last_error = "기록을 저장하지 못했습니다. 저장 공간을 확인해 주세요."
 		return false
 	file.store_string(JSON.stringify(data, "\t", true, true))
 	file.flush()
 	file.close()
 	var result := DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
 	if result != OK:
-		last_error = "기록 저장 실패: 임시 파일을 바꾸지 못했습니다."
+		last_error = "기록을 저장하지 못했습니다."
 		return false
 	last_error = ""
 	return true

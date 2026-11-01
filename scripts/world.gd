@@ -66,10 +66,8 @@ func _draw() -> void:
 		bush(Vector2(x, FLOOR))
 	for index in range(CHECKPOINTS.size()):
 		flag(CHECKPOINTS[index], game.checkpoint_index >= index, str(index + 1))
-	# An intentionally suspicious false finish. The actual exit has a clear arch.
 	draw_rect(Rect2(2620, 346, 4, 70), Color("44655d"))
 	draw_rect(Rect2(2624, 347, 32, 21), Color("d89376"))
-	draw_string(font, Vector2(2634, 363), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("fff1cf"))
 	goal(Vector2(GOAL, FLOOR))
 	if not game.secret_collected:
 		var sy := sin(visual_time * 3) * 3
