@@ -44,6 +44,7 @@ var test_mode := false
 var updater: TryUpdater
 var update_dialog: AcceptDialog
 var update_button: Button
+var mode_before_fullscreen: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
 
 func _ready() -> void:
 	test_mode = "--test" in OS.get_cmdline_user_args()
@@ -237,8 +238,12 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("fullscreen"):
-		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		var window_mode := DisplayServer.window_get_mode()
+		if window_mode in [DisplayServer.WINDOW_MODE_FULLSCREEN, DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN]:
+			DisplayServer.window_set_mode(mode_before_fullscreen)
+		else:
+			mode_before_fullscreen = window_mode
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif event.is_action_pressed("mute"):
 		records.data.muted = not records.data.muted
 		apply_audio_settings()
