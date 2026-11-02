@@ -106,7 +106,7 @@ func _physics_process(delta: float) -> void:
 	if direction != 0:
 		facing = direction
 	velocity.y += GRAVITY * delta
-	if wall and direction * get_wall_normal().x < 0:
+	if wall and wall_lock == 0 and direction * get_wall_normal().x < 0:
 		if Input.is_action_pressed("climb_up"):
 			velocity.y = -140
 		elif velocity.y > 65:
