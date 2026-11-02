@@ -2,12 +2,15 @@ class_name TryRecords
 extends RefCounted
 
 const MAX_SAFE_COUNTER := 9_007_199_254_740_991
+const COURSE_ID := "continuous-40-v1"
 
 var path := "user://records.json"
 var data := {"version": 1, "deaths": 0, "attempts": 0, "clears": 0, "best_time": 0.0, "no_death": false, "secret": false, "music": true, "sfx": true, "muted": false}
 var last_error := ""
 
 func _init(test_mode: bool = false) -> void:
+	data.course = COURSE_ID
+	data.legacy = {}
 	if test_mode:
 		path = "user://test_records.json"
 		return
@@ -33,6 +36,13 @@ func load_records() -> void:
 	for key in ["no_death", "secret", "music", "sfx", "muted"]:
 		if loaded.get(key) is bool:
 			data[key] = loaded[key]
+	if loaded.get("legacy") is Dictionary:
+		data.legacy = loaded.legacy
+	if loaded.get("course", "meadow-v1") != COURSE_ID:
+		data.legacy[str(loaded.get("course", "meadow-v1"))] = {"best_time": data.best_time, "no_death": data.no_death, "secret": data.secret}
+		data.best_time = 0.0
+		data.no_death = false
+		data.secret = false
 
 func save() -> bool:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
