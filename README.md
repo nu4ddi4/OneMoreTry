@@ -16,6 +16,7 @@ Windows 10/11 x64 · OpenGL 3.3
 | --- | --- |
 | A / D, ← / → | 이동 |
 | Space | 점프 |
+| W / S, ↑ / ↓ | 오르내리기 |
 | R | 다시하기 |
 | ESC | 일시정지 |
 | M | 음소거 |
@@ -34,6 +35,8 @@ Godot 4.6.3에서 `project.godot`을 엽니다.
 ```bash
 godot --headless --editor --import --quit
 godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 python3 tools/test_updater.py
 ```

@@ -1,37 +1,42 @@
 class_name TryWorld
 extends Node2D
 
-const LENGTH := 3600.0
-const FLOOR := 416.0
-const GROUNDS := [Rect2(0, 416, 640, 124), Rect2(784, 416, 880, 124), Rect2(1824, 416, 1040, 124), Rect2(3040, 416, 560, 124)]
-const LEDGES := [Rect2(1920, 354, 88, 16), Rect2(2050, 296, 80, 16), Rect2(2180, 354, 88, 16)]
-const CHECKPOINTS := [Vector2(1460, 416), Vector2(2380, 416)]
-const SECRET := Vector2(2089, 271)
-const GOAL := 3384.0
-
+const Course = preload("res://scripts/course.gd")
+const LENGTH := Course.LENGTH
+const FLOOR := Course.FLOOR
+const CHECKPOINTS := Course.CHECKPOINTS
+const SECRET := Course.SECRET
+const GOAL := Course.GOAL
+var grounds: Array[Rect2] = []
+var ledges: Array[Rect2] = []
 var game: Node2D
 var font: Font
 var visual_time := 0.0
 
+func add_solid(rect: Rect2) -> void:
+	var body := StaticBody2D.new()
+	var collider := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = rect.size
+	collider.shape = shape
+	collider.position = rect.get_center()
+	body.add_child(collider)
+	add_child(body)
+
 func _ready() -> void:
 	font = load("res://assets/fonts/OneMoreSans.otf")
-	for rect in GROUNDS + LEDGES:
-		var body := StaticBody2D.new()
-		var collider := CollisionShape2D.new()
-		var shape := RectangleShape2D.new()
-		shape.size = rect.size
-		collider.shape = shape
-		collider.position = rect.get_center()
-		body.add_child(collider)
-		add_child(body)
-	var left_wall := StaticBody2D.new()
-	var wall_shape := CollisionShape2D.new()
-	var wall_box := RectangleShape2D.new()
-	wall_box.size = Vector2(40, 1000)
-	wall_shape.shape = wall_box
-	wall_shape.position = Vector2(-20, 200)
-	left_wall.add_child(wall_shape)
-	add_child(left_wall)
+	for data in Course.all():
+		var cursor := 0.0
+		for gap in data.gaps:
+			grounds.append(Rect2(data.x + cursor, FLOOR, gap.x - cursor, 204))
+			cursor = gap.y
+		grounds.append(Rect2(data.x + cursor, FLOOR, Course.CELL - cursor, 204))
+		for local in data.solids:
+			ledges.append(Rect2(local.position + Vector2(data.x, 0), local.size))
+	for rect in grounds + ledges:
+		add_solid(rect)
+	add_solid(Rect2(-40, -512, 40, 1600))
+	add_solid(Rect2(LENGTH, -512, 40, 1600))
 
 func _process(delta: float) -> void:
 	visual_time += delta
@@ -43,7 +48,8 @@ func _draw() -> void:
 	var left := center.x - view_size.x / 2.0
 	var top := center.y - view_size.y / 2.0
 	# Include the camera shake margin so a resized window never exposes clear color.
-	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Color("b9dedb"))
+	var route_tint := clampf(center.x / LENGTH, 0, 1)
+	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Color("b9dedb").lerp(Color("9da5b6"), route_tint))
 	draw_rect(Rect2(left - 8, 200, view_size.x + 16, 180), Color("b0d7d1"))
 	# All scenery uses a deliberately limited palette and integer pixel steps.
 	for i in range(-1, ceili(view_size.x / 221.0) + 2):
@@ -58,22 +64,23 @@ func _draw() -> void:
 			var tint: Color = [Color("9bc6bc"), Color("80b8a2"), Color("64a58e")][layer]
 			var points := PackedVector2Array([Vector2(x, 440), Vector2(x, y + 50), Vector2(x + 24, y + 50), Vector2(x + 24, y + 27), Vector2(x + 58, y + 27), Vector2(x + 58, y + 10), Vector2(x + 86, y + 10), Vector2(x + 86, y), Vector2(x + 140, y), Vector2(x + 140, y + 16), Vector2(x + 180, y + 16), Vector2(x + 180, y + 40), Vector2(x + spacing, y + 40), Vector2(x + spacing, 440)])
 			draw_colored_polygon(points, tint)
-	for rect in GROUNDS:
+	for rect in grounds:
+		if rect.end.x < left - 32 or rect.position.x > left + view_size.x + 32:
+			continue
 		var extended: Rect2 = rect
 		extended.size.y = maxf(rect.size.y, top + view_size.y + 8 - rect.position.y)
 		terrain(extended)
-	for rect in LEDGES:
-		terrain(rect, true)
-	for i in range(36):
+	for rect in ledges:
+		if rect.end.x >= left - 32 and rect.position.x <= left + view_size.x + 32:
+			terrain(rect, true)
+	for i in range(maxi(0, int(left / 101) - 1), mini(int(LENGTH / 101), int((left + view_size.x) / 101) + 2)):
 		var x := i * 101 + 37
 		if on_ground(x):
 			grass(Vector2(x, FLOOR), i)
-	for x in [340, 860, 1380, 2270, 2510, 3280, 3520]:
-		bush(Vector2(x, FLOOR))
+	for n in range(maxi(0, int(left / 640)), mini(40, int((left + view_size.x) / 640) + 1)):
+		bush(Vector2(n * 640 + 536, FLOOR))
 	for index in range(CHECKPOINTS.size()):
 		flag(CHECKPOINTS[index], game.checkpoint_index >= index, str(index + 1))
-	draw_rect(Rect2(2620, 346, 4, 70), Color("44655d"))
-	draw_rect(Rect2(2624, 347, 32, 21), Color("d89376"))
 	goal(Vector2(GOAL, FLOOR))
 	if not game.secret_collected:
 		var sy := sin(visual_time * 3) * 3
@@ -84,7 +91,7 @@ func _draw() -> void:
 		draw_rect(Rect2(SECRET + Vector2(-2, -2 + sy), Vector2(4, 4)), Color("e5a764"))
 
 func on_ground(x: float) -> bool:
-	for rect in GROUNDS:
+	for rect in grounds:
 		if x > rect.position.x + 12 and x < rect.end.x - 12:
 			return true
 	return false

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Optional matching tag: main v0.2.1, beta v0.2.1-beta'
+        description: 'Optional matching tag: main v0.3.0, beta v0.3.0-beta'
         required: false
         type: string
       verified_run_id:
@@ -71,8 +71,14 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
       - name: Resolution, UI bounds and dialog resize regression tests
         run: godot --headless --script tests/display_tests.gd -- --test
-      - name: Full stage traversal with normal inputs
+      - name: Forty encounter reset, pause and mechanic contracts
+        run: godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
+      - name: Wrong-decision physical consequence in all forty encounters
+        run: godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
+      - name: Continuous course traversal with normal inputs
         run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
+      - name: Replay identical physics at 30 fps with platform, chain and lift pauses
+        run: godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses
       - name: Update metadata, real HTTP download, verification and cancellation
         run: python3 tools/test_updater.py
       - name: Export Windows x64
