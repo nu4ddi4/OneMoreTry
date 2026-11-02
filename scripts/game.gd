@@ -3,7 +3,8 @@ extends Node2D
 
 const PlayerScript = preload("res://scripts/player.gd")
 const WorldScript = preload("res://scripts/world.gd")
-const TrapScript = preload("res://scripts/trap.gd")
+const EncounterScript = preload("res://scripts/encounter.gd")
+const Course = preload("res://scripts/course.gd")
 const RecordsScript = preload("res://scripts/records.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const UpdaterScript = preload("res://scripts/updater.gd")
@@ -20,7 +21,7 @@ var world: TryWorld
 var camera: Camera2D
 var sound: TrySound
 var records: TryRecords
-var traps: Array[TryTrap] = []
+var traps: Array[TryEncounter] = []
 var checkpoint_index := -1
 var spawn_point := Vector2(100, 416)
 var elapsed := 0.0
@@ -36,7 +37,6 @@ var hud: Control
 var overlay: Control
 var death_label: Label
 var time_label: Label
-var checkpoint_label: Label
 var toast_label: Label
 var toast_clock := 0.0
 var progress: ColorRect
@@ -169,7 +169,7 @@ func refresh_update_ui() -> void:
 		update_button.text = "새 버전" if updater.state in [TryUpdater.State.AVAILABLE, TryUpdater.State.READY] else "업데이트"
 
 func configure_input() -> void:
-	var bindings := {"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "jump": [KEY_SPACE], "retry": [KEY_R], "pause_game": [KEY_ESCAPE], "fullscreen": [KEY_F11], "mute": [KEY_M]}
+	var bindings := {"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "jump": [KEY_SPACE], "climb_up": [KEY_W, KEY_UP], "climb_down": [KEY_S, KEY_DOWN], "retry": [KEY_R], "pause_game": [KEY_ESCAPE], "fullscreen": [KEY_F11], "mute": [KEY_M]}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -184,26 +184,12 @@ func apply_audio_settings() -> void:
 	sound.set_music(records.data.music and audible)
 
 func build_traps() -> void:
-	for i in range(3):
-		add_trap(TryTrap.Kind.CRUMBLE, Vector2(640 + i * 48, 416), Vector2(48, 20))
-	add_trap(TryTrap.Kind.SPRING, Vector2(1000, 416), Vector2(80, 24))
-	add_trap(TryTrap.Kind.FALLING, Vector2(1232, 150), Vector2(56, 48))
-	for i in range(2):
-		add_trap(TryTrap.Kind.CRUMBLE, Vector2(1664 + i * 48, 416), Vector2(48, 18))
-	add_trap(TryTrap.Kind.SPIKES, Vector2(1990, 416), Vector2(64, 24))
-	add_trap(TryTrap.Kind.SPRING, Vector2(2670, 416), Vector2(80, 24))
-	for i in range(4):
-		add_trap(TryTrap.Kind.CRUMBLE, Vector2(2864 + i * 44, 416), Vector2(44, 20))
-	add_trap(TryTrap.Kind.SPIKES, Vector2(3160, 416), Vector2(80, 24))
-
-func add_trap(kind: TryTrap.Kind, at: Vector2, size: Vector2) -> void:
-	var trap := TrapScript.new()
-	trap.kind = kind
-	trap.position = at
-	trap.size = size
-	trap.game = self
-	add_child(trap)
-	traps.append(trap)
+	for data in Course.all():
+		var encounter := EncounterScript.new()
+		encounter.definition = data
+		encounter.game = self
+		add_child(encounter)
+		traps.append(encounter)
 
 func interaction_enabled() -> bool:
 	return mode == Mode.PLAYING and player != null and player.alive
@@ -464,12 +450,9 @@ func build_ui() -> void:
 	var hud_panel := panel(hud, Vector2(20, 18), Vector2(920, 62), Color("203c40f2"))
 	hud_panel.set_anchor(SIDE_RIGHT, 1.0)
 	hud_panel.offset_right = -20
-	text(hud, "01", Vector2(38, 27), Vector2(36, 36), 25, MINT)
-	text(hud, "초원", Vector2(87, 34), Vector2(180, 30), 20)
-	checkpoint_label = text(hud, "", Vector2(330, 34), Vector2(230, 30), 14, MUTED)
-	death_label = text(hud, "", Vector2(595, 30), Vector2(145, 35), 19)
+	death_label = text(hud, "", Vector2(38, 30), Vector2(210, 35), 19)
 	time_label = text(hud, "", Vector2(762, 30), Vector2(150, 35), 19, MINT)
-	for entry in [death_label, time_label]:
+	for entry in [time_label]:
 		var left_offset: float = entry.position.x - DESIGN_SIZE.x
 		var right_offset: float = left_offset + entry.size.x
 		entry.set_anchor(SIDE_LEFT, 1.0)
@@ -506,7 +489,6 @@ func clear_overlay() -> void:
 func update_hud() -> void:
 	death_label.text = "사망  %03d" % run_deaths
 	time_label.text = format_time(elapsed)
-	checkpoint_label.text = "체크포인트  %d / 2" % (checkpoint_index + 1)
 	progress.size.x = clampf((player.position.x - 100) / (TryWorld.GOAL - 100), 0, 1) * progress.get_parent().size.x
 
 static func format_time(seconds: float) -> String:
@@ -564,8 +546,8 @@ func pause_game() -> void:
 		apply_audio_settings()
 		save_records()
 		pause_game())
-	text(card, "A / D  이동   SPACE  점프   R  다시하기", Vector2(30, 252), Vector2(360, 20), 11, MUTED)
-	text(card, "ESC  계속   M  음소거   F11  전체 화면", Vector2(30, 276), Vector2(360, 20), 11, MUTED)
+	text(card, "A / D  이동   SPACE  점프   W / S  오르내리기", Vector2(30, 252), Vector2(360, 20), 11, MUTED)
+	text(card, "ESC  계속   R  다시하기   M  음소거   F11  전체 화면", Vector2(30, 276), Vector2(360, 20), 11, MUTED)
 	resume.grab_focus()
 
 func resume_game() -> void:
