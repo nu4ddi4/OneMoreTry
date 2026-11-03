@@ -20,7 +20,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: game-${{ github.workflow }}-${{ github.ref }}-${{ inputs.verified_run_id || 'build' }}
+  # A manual retry must not wait behind an unresponsive push runner.
+  group: game-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || inputs.verified_run_id || 'build' }}
   cancel-in-progress: true
 
 jobs:
