@@ -74,6 +74,10 @@ func _ready() -> void:
 	add_child(player)
 	player.died.connect(on_death)
 	player.jumped.connect(func(): sound.effect("jump"))
+	player.landed.connect(func(speed: float):
+		if speed >= 340:
+			sound.effect("click")
+			burst(player.position, Color("a77954"), 5))
 	build_ui()
 	build_updater()
 	build_quit_dialog()

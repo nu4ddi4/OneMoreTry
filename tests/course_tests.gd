@@ -25,7 +25,7 @@ func snapshot(encounter: TryEncounter) -> Dictionary:
 func fixture(number: int) -> void:
 	for action in ["move_left", "move_right", "jump", "climb_up", "climb_down"]: Input.action_release(action)
 	game.start_run()
-	game.player.respawn(Vector2((number - 1) * 640 + (96 if number == 40 else 620), 416))
+	game.player.respawn(Vector2(TryCourse.origin(number) + (96 if number == 40 else TryCourse.width(number) - 20), 416))
 	await frames(3)
 	game.traps[number - 1].arm()
 func run() -> void:

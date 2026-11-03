@@ -5,12 +5,16 @@ var failed := false
 var room := 1
 var origin := 0.0
 var isolated := 0
+var fast_route := false
 var frames_used := 0
 var tape: Array[int] = []
 var positions: Array = []
+var room_stats: Dictionary = {}
+var pause_candidates: Dictionary = {}
 const ACTIONS := ["move_left", "move_right", "jump", "climb_up", "climb_down"]
 
 func _initialize() -> void:
+	fast_route = "--fast" in OS.get_cmdline_user_args()
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--room="): isolated = int(argument.trim_prefix("--room="))
 	call_deferred("run")
@@ -21,11 +25,17 @@ func tick(count: int = 1) -> void:
 		var bits := 0
 		for index in ACTIONS.size():
 			if Input.is_action_pressed(ACTIONS[index]): bits |= 1 << index
+		if not room_stats.has(room): room_stats[room] = {"ticks": 0, "still": 0}
+		room_stats[room].ticks += 1
+		if game.player.is_on_floor() and absf(game.player.velocity.x) < 5: room_stats[room].still += 1
 		tape.append(bits)
 		await physics_frame
 		await process_frame
 		positions.append([game.player.position.x, game.player.position.y])
 		frames_used += 1
+		if not pause_candidates.has(room):
+			if (room == 6 and game.player.carrier == game.traps[5].surfaces.platform) or (room == 20 and game.player.chain != null and game.player.position.y < 300) or (room == 29 and game.player.carrier == game.traps[28].surfaces.lift and game.player.position.y < 400):
+				pause_candidates[room] = frames_used
 		if not game.player.alive or game.run_deaths > 0:
 			failed = true
 			push_error("ROUTE died: room=%d x=%.1f y=%.1f clock=%.3f velocity=%s" % [room, game.player.position.x - origin, game.player.position.y, game.traps[room - 1].clock, game.player.velocity])
@@ -65,7 +75,7 @@ func jump(hold: int = 45, direction: int = 1, air_after: int = -1) -> void:
 	horizontal(direction)
 	Input.action_press("jump")
 	for i in 200:
-		if i == hold: Input.action_release("jump")
+		if i == hold or (air_after >= 2 and i == air_after - 2): Input.action_release("jump")
 		if i == air_after: Input.action_press("jump")
 		if air_after >= 0 and i == air_after + hold: Input.action_release("jump")
 		await tick()
@@ -98,7 +108,15 @@ func ride(key: String, second: bool) -> void:
 
 func route() -> void:
 	match room:
-		1, 7, 9, 18, 19, 37, 39: pass
+		9, 18, 19, 37, 39: pass
+		1:
+			await go(210)
+			await jump(10)
+			await go(410, false)
+			await jump()
+		7:
+			await go(238)
+			await jump(70, 1, 24)
 		2, 38:
 			await go(180)
 			await jump(6)
@@ -107,8 +125,9 @@ func route() -> void:
 			await go(282, false)
 			await jump()
 		4:
-			await go(120)
-			await wait_clock(1.4)
+			await go(144 if fast_route else 120)
+			if fast_route: await jump(6, 0)
+			else: await wait_clock(1.4)
 			await go(180, false)
 			await jump()
 		5:
@@ -116,12 +135,15 @@ func route() -> void:
 			await go(88)
 			await wait_clock(1.15)
 		6:
-			await go(176)
-			await wait_clock(2.6)
-			await jump(6)
+			if fast_route:
+				await go(187, false)
+				await jump()
+			else:
+				await go(176)
+				await wait_clock(2.6)
+				await jump(6)
 			horizontal(0)
-			while not failed and game.traps[5].surfaces.platform.position.x < 350:
-				await tick()
+			while not failed and game.traps[5].surfaces.platform.position.x < 350: await tick()
 			await jump()
 		8:
 			await go(168)
@@ -160,12 +182,37 @@ func route() -> void:
 			await go(218, false)
 			await jump(6)
 		17:
-			await go(156)
-			await wait_clock(1.2)
+			if fast_route:
+				await go(158)
+				horizontal(0)
+				Input.action_press("jump")
+				await tick(24)
+				Input.action_release("jump")
+				await tick(2)
+				Input.action_press("jump")
+				await tick(20)
+				await go(116)
+				Input.action_release("jump")
+				await land()
+				await go(126)
+				horizontal(0)
+				Input.action_press("jump")
+				await tick(28)
+				horizontal(1)
+				await tick(35)
+				Input.action_release("jump")
+			else:
+				await go(156)
+				await wait_clock(1.2)
 		20:
-			await go(136)
-			await wait_clock(1.95)
-			await go(370, false)
+			if fast_route:
+				await go(292, false)
+			else:
+				await go(154, false)
+				await jump(6, -1)
+				await go(136)
+				while not failed and game.traps[19].clock - game.traps[19].auxiliary < 1.05: await tick()
+				await go(370, false)
 			Input.action_press("climb_up")
 			Input.action_press("jump")
 			for i in 180:
@@ -179,12 +226,38 @@ func route() -> void:
 			await jump()
 		21, 22:
 			await go(165)
-			await wait_clock(0.22 if room == 21 else 0.28)
+			var exchange: TryEncounter = game.traps[room - 1]
+			while not failed and exchange.clock - exchange.auxiliary < (0.12 if room == 21 else 0.25): await tick()
 			await jump(45 if room == 21 else 6, 0)
-			await wait_clock(1.15)
+			while not failed and exchange.clock - exchange.auxiliary < 1.15: await tick()
 		23:
 			await go(294)
 			await tick(52)
+			await go(406, false)
+			Input.action_press("climb_up")
+			Input.action_press("jump")
+			for i in 160:
+				if i == 45: Input.action_release("jump")
+				await tick()
+				if failed or game.player.chain != null: break
+			Input.action_release("jump")
+			horizontal(0)
+			await tick(55)
+			Input.action_release("climb_up")
+			horizontal(1)
+			Input.action_press("jump")
+			await go(568)
+			Input.action_release("jump")
+			for i in 90:
+				if failed or game.player.air_jumps > 0: break
+				await tick()
+			if game.player.air_jumps == 0:
+				failed = true
+				push_error("Chain exit must collect the midair charge")
+			await tick(2)
+			Input.action_press("jump")
+			await go(690, false, true)
+			Input.action_release("jump")
 		24:
 			await go(290)
 			await tick(170)
@@ -194,12 +267,18 @@ func route() -> void:
 			await go(314)
 			await jump(12)
 			await go(456)
-			await wait_clock(2.8)
+			if not fast_route: await wait_clock(2.8)
 		26:
 			await go(146, false)
 			await jump()
 		27, 28:
-			await ride("ferry", room == 27)
+			if fast_route and room == 27:
+				await go(166)
+				await wait_clock(0.5)
+				await jump()
+				await jump()
+			else:
+				await ride("ferry", room == 27)
 		29, 30:
 			await go(236)
 			var encounter: TryEncounter = game.traps[room - 1]
@@ -218,7 +297,8 @@ func route() -> void:
 				await tick()
 				if failed or (i > 5 and game.player.is_on_floor()): break
 			Input.action_release("jump")
-			await wait_clock(1.9)
+			if fast_route: await tick(16)
+			else: await wait_clock(1.9)
 			await go(380, false)
 			await jump(6)
 		32:
@@ -232,8 +312,8 @@ func route() -> void:
 				await tick()
 			await jump()
 		33:
-			await go(136)
-			await wait_clock(0.9)
+			await go(226)
+			while not failed and game.traps[32].clock - game.traps[32].auxiliary < 0.8: await tick()
 		34:
 			await go(248)
 			await wait_clock(2.0)
@@ -250,7 +330,10 @@ func route() -> void:
 			await tick(100)
 			await go(80, false)
 			await jump()
-	if not failed: await go(704)
+	if not failed: await go(TryCourse.width(room) + 64, not (fast_route and room in [17,18,19]))
+	if fast_route and room in [17, 18, 19] and game.player.position.y > 245:
+		failed = true
+		push_error("Fast route must actually use the connected upper bridge")
 
 func run() -> void:
 	game = load("res://scenes/main.tscn").instantiate()
@@ -262,7 +345,7 @@ func run() -> void:
 	var last := isolated if isolated > 0 else 40
 	for number in range(first, last + 1):
 		room = number
-		origin = (room - 1) * 640.0
+		origin = TryCourse.origin(room)
 		if isolated > 0:
 			game.player.respawn(Vector2(origin + 64, 416))
 			await tick(5)
@@ -275,8 +358,8 @@ func run() -> void:
 	print("FULL PLAYTHROUGH: %s rooms=%d deaths=%d time=%s frames=%d checkpoints=%d secret=%s" % ["FAIL" if failed else "PASS",room,game.run_deaths,OneMoreGame.format_time(game.elapsed),frames_used, game.checkpoint_index + 1, game.secret_collected])
 	if not failed and isolated == 0:
 		DirAccess.make_dir_recursive_absolute("res://build")
-		var file := FileAccess.open("res://build/course-replay.json", FileAccess.WRITE)
-		file.store_string(JSON.stringify({"frames": tape, "positions": positions, "x": game.player.position.x, "time": game.elapsed}))
+		var file := FileAccess.open("res://build/course-fast-replay.json" if fast_route else "res://build/course-replay.json", FileAccess.WRITE)
+		file.store_string(JSON.stringify({"frames": tape, "positions": positions, "x": game.player.position.x, "time": game.elapsed, "course": TryRecords.COURSE_ID, "fast": fast_route, "stats": room_stats, "pauses": pause_candidates.values()}))
 		file.close()
 	game.queue_free()
 	await process_frame

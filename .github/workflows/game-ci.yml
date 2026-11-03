@@ -68,12 +68,18 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/inspection_tests.gd -- --test
       - name: Forty encounter reset, pause and mechanic contracts
         run: godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
+      - name: Action-driven traps, landing feedback, chain control and migration
+        run: godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --test
       - name: Wrong-decision physical consequence in all forty encounters
         run: godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
       - name: Continuous course traversal with normal inputs
         run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
       - name: Replay identical physics at 30 fps with platform, chain and lift pauses
         run: godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses
+      - name: Complete skill route through connected upper path and first ferry
+        run: godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test --fast
+      - name: Replay skill route at 30 fps with device pauses
+        run: godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --fast --pauses
       - name: Update metadata, real HTTP download, verification and cancellation
         run: python3 tools/test_updater.py
       - name: Export Windows x64
