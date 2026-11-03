@@ -129,7 +129,7 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 func die(reason: String) -> void:
-	if not alive or not enabled:
+	if not alive or not enabled or (reason != "retry" and bool(get_meta("inspection_invincible", false))):
 		return
 	alive = false
 	detach_chain()
