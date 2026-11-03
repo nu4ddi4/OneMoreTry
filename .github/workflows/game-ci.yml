@@ -28,21 +28,14 @@ jobs:
     name: Branch policy
     runs-on: ubuntu-latest
     steps:
-      - name: Enforce feature to beta, beta to main
+      - name: Validate release target
         env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.base_ref }}
-          HEAD: ${{ github.head_ref }}
+          RELEASE_BRANCH: ${{ github.base_ref || github.ref_name }}
         run: |
-          if [[ "$EVENT" != pull_request ]]; then exit 0; fi
-          if [[ "$BASE" == main && "$HEAD" != beta ]]; then
-            echo 'main accepts pull requests only from beta.'
-            exit 1
-          fi
-          if [[ "$BASE" == beta && ! "$HEAD" =~ ^(feature|fix|chore)/.+ ]]; then
-            echo 'beta accepts feature/*, fix/*, or chore/* branches.'
-            exit 1
-          fi
+          case "$RELEASE_BRANCH" in
+            main|beta) ;;
+            *) echo 'Expected main or beta as the build target.'; exit 1 ;;
+          esac
 
   build:
     name: Test & export Windows

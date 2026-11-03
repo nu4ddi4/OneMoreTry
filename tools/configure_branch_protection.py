@@ -1,19 +1,13 @@
-"""Run with an administration-capable GitHub CLI identity to enforce the policy."""
+"""Run with an administration-capable GitHub CLI identity to allow direct development while blocking force pushes and deletion."""
 import json
 import subprocess
 
-REPOSITORY = "nu4ddi4/side-scroller-game"
+REPOSITORY = "nu4ddi4/OneMoreTry"
 POLICY = {
-    "required_status_checks": {
-        "strict": True,
-        "contexts": ["Branch policy", "Test & export Windows", "Windows launch"],
-    },
+    # Main accepts direct commits. Publishing is gated by the complete CI run.
+    "required_status_checks": None,
     "enforce_admins": True,
-    "required_pull_request_reviews": {
-        "dismiss_stale_reviews": True,
-        "require_code_owner_reviews": False,
-        "required_approving_review_count": 0,
-    },
+    "required_pull_request_reviews": None,
     "restrictions": None,
     "required_linear_history": False,
     "allow_force_pushes": False,
