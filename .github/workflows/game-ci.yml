@@ -126,9 +126,26 @@ jobs:
           if (!(Test-Path $compiler)) { throw 'Inno Setup 6 is required on this runner' }
           & $compiler "/DAppVersion=$($info.version)" "/DBaseVersion=$($info.base_version)" installer/OneMoreTry.iss
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
-      - name: Install, reinstall, launch and uninstall with saved-record preservation
+      - name: Install Windows package and preserve saved records
+        timeout-minutes: 3
         shell: pwsh
-        run: ./tools/test_installer.ps1
+        run: ./tools/test_installer.ps1 -Phase install
+      - name: Launch installed game
+        timeout-minutes: 2
+        shell: pwsh
+        run: ./tools/test_installer.ps1 -Phase launch-installed
+      - name: Reinstall Windows package and preserve saved records
+        timeout-minutes: 3
+        shell: pwsh
+        run: ./tools/test_installer.ps1 -Phase reinstall
+      - name: Launch reinstalled game
+        timeout-minutes: 2
+        shell: pwsh
+        run: ./tools/test_installer.ps1 -Phase launch-reinstalled
+      - name: Uninstall Windows package and preserve saved records
+        timeout-minutes: 3
+        shell: pwsh
+        run: ./tools/test_installer.ps1 -Phase uninstall
       - name: Launch the exported exe on native Windows
         shell: pwsh
         run: |
