@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 signal died(reason: String)
 signal jumped
+signal landed(speed: float)
 
 const SPEED := 250.0
 const JUMP_SPEED := -480.0
@@ -67,9 +68,11 @@ func _physics_process(delta: float) -> void:
 	var fresh_jump := Input.is_action_just_pressed("jump")
 	if chain:
 		if fresh_jump:
+			var inherited := chain.release_velocity(chain_distance)
 			detach_chain()
-			velocity.x = direction * SPEED
 			launch()
+			velocity.x = clampf(direction * SPEED + inherited.x, -390, 390)
+			wall_lock = 0.12
 			fresh_jump = false
 		else:
 			chain_distance = clampf(chain_distance + Input.get_axis("climb_up", "climb_down") * delta * 150, 32, chain.length)
@@ -122,7 +125,8 @@ func _physics_process(delta: float) -> void:
 			if contact.get_normal().y < -0.7 and contact.get_collider() is TrySurface:
 				carrier = contact.get_collider()
 	if is_on_floor() and not was_grounded:
-		land_squash = 0.2
+		land_squash = clampf(last_vertical_speed / 1800.0, 0.1, 0.35)
+		landed.emit(last_vertical_speed)
 	was_grounded = is_on_floor()
 	if position.y > 620:
 		die("fall")

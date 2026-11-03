@@ -30,7 +30,7 @@ func _ready() -> void:
 		for gap in data.gaps:
 			grounds.append(Rect2(data.x + cursor, FLOOR, gap.x - cursor, 204))
 			cursor = gap.y
-		grounds.append(Rect2(data.x + cursor, FLOOR, Course.CELL - cursor, 204))
+		grounds.append(Rect2(data.x + cursor, FLOOR, data.width - cursor, 204))
 		for local in data.solids:
 			ledges.append(Rect2(local.position + Vector2(data.x, 0), local.size))
 	for rect in grounds + ledges:
@@ -77,8 +77,9 @@ func _draw() -> void:
 		var x := i * 101 + 37
 		if on_ground(x):
 			grass(Vector2(x, FLOOR), i)
-	for n in range(maxi(0, int(left / 640)), mini(40, int((left + view_size.x) / 640) + 1)):
-		bush(Vector2(n * 640 + 536, FLOOR))
+	for n in range(Course.number_at(left) - 1, Course.number_at(left + view_size.x)):
+		var at := Vector2(Course.origin(n + 1) + Course.width(n + 1) - 104, FLOOR)
+		if on_ground(at.x): bush(at)
 	for index in range(CHECKPOINTS.size()):
 		flag(CHECKPOINTS[index], game.checkpoint_index >= index, str(index + 1))
 	goal(Vector2(GOAL, FLOOR))
@@ -94,6 +95,11 @@ func on_ground(x: float) -> bool:
 	for rect in grounds:
 		if x > rect.position.x + 12 and x < rect.end.x - 12:
 			return true
+	# Concealed surfaces carry the same foliage as ordinary ground.
+	if game and not game.traps.is_empty():
+		for surface in game.traps[Course.number_at(x) - 1].surfaces.values():
+			if surface.camouflaged and surface.active and x > surface.global_position.x + 12 and x < surface.global_position.x + surface.dimensions.x - 12:
+				return true
 	return false
 
 func cloud(at: Vector2, color: Color) -> void:

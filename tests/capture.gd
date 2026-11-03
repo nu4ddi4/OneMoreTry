@@ -17,7 +17,7 @@ func run() -> void:
 	root.size = Vector2i(1280,720)
 	await screenshot("title")
 	game.start_run()
-	game.player.respawn(Vector2(9 * 640 + 170,416))
+	game.player.respawn(Vector2(TryCourse.origin(10) + 170,416))
 	game.camera.position.x = game.player.position.x + 130
 	Input.action_press("jump")
 	await frames(7)
@@ -33,7 +33,7 @@ func run() -> void:
 	game.pause_game()
 	await screenshot("pause")
 	game.start_run()
-	game.player.respawn(Vector2(13 * 640 + 330,416))
+	game.player.respawn(Vector2(TryCourse.origin(14) + 330,416))
 	game.camera.position.x = game.player.position.x + 130
 	Input.action_press("move_right")
 	Input.action_press("climb_up")
@@ -50,7 +50,7 @@ func run() -> void:
 	await screenshot("chain")
 	Input.action_release("climb_up")
 	game.start_run()
-	game.player.respawn(Vector2(23 * 640 + 146,416))
+	game.player.respawn(Vector2(TryCourse.origin(24) + 146,416))
 	game.camera.position.x = game.player.position.x + 130
 	Input.action_press("move_right")
 	await frames(30)

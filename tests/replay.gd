@@ -26,16 +26,11 @@ func apply_input(next: int) -> void:
 			else: Input.action_release(ACTIONS[n])
 	bits = next
 func run() -> void:
-	data = JSON.parse_string(FileAccess.get_file_as_string("res://build/course-replay.json"))
+	var path := "res://build/course-fast-replay.json" if "--fast" in OS.get_cmdline_user_args() else "res://build/course-replay.json"
+	data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert(data.get("course") == TryRecords.COURSE_ID, "Replay must belong to the current course")
 	if "--pauses" in OS.get_cmdline_user_args():
-		for number in [6,20,29]:
-			for n in data.frames.size():
-				var x: float = float(data.positions[n][0]) - (number - 1) * 640
-				var y: float = data.positions[n][1]
-				var input: int = data.frames[n]
-				if (number == 6 and x > 250 and x < 350 and y > 410 and y < 420 and input == 0) or (number == 20 and x > 420 and x < 520 and y < 300 and input == 8) or (number == 29 and x > 230 and x < 245 and y > 360 and y < 400 and input == 0):
-					pause_points.append(n + 1)
-					break
+		for point in data.pauses: pause_points.append(int(point))
 		assert(pause_points.size() == 3, "Replay must pause on a moving platform, chain and lift")
 	game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)

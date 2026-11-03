@@ -38,7 +38,7 @@ func run() -> void:
 	game.records.path = "user://wrong-route-records.json"
 	for id in range(1, 41):
 		room = id
-		origin = (id - 1) * 640.0
+		origin = TryCourse.origin(id)
 		stop()
 		Input.action_release("jump")
 		Input.action_release("climb_up")
@@ -52,7 +52,7 @@ func run() -> void:
 			7:
 				await go(228)
 				Input.action_press("jump")
-				await go(290)
+				await go(350)
 				stop()
 				Input.action_release("jump")
 			9,18,19,33:
@@ -74,10 +74,9 @@ func run() -> void:
 				await go(214)
 				await press_jump(45)
 			22:
-				await go(150)
+				await go(165)
 				stop()
-				await tick(20)
-				await wait_until(0.28)
+				while game.run_deaths == 0 and game.traps[21].clock - game.traps[21].auxiliary < 0.25: await tick()
 				await press_jump(45)
 			27:
 				await go(166)

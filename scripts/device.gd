@@ -9,6 +9,8 @@ var cooldown := 0.0
 var clock := 0.0
 var length := 224.0
 var rider: TryPlayer
+var swing := 0.0
+var swing_velocity := 0.0
 
 func _ready() -> void:
 	process_physics_priority = 5
@@ -18,11 +20,18 @@ func reset() -> void:
 	cooldown = 0
 	clock = 0
 	rider = null
+	swing = 0
+	swing_velocity = 0
 	queue_redraw()
 
 func tip(distance: float = -1) -> Vector2:
-	var angle := sin(clock * 1.8) * 0.28
+	var angle := sin(clock * 1.8) * 0.28 + swing
 	return global_position + Vector2(sin(angle), cos(angle)) * (length if distance < 0 else distance)
+
+func release_velocity(distance: float) -> Vector2:
+	var angle := sin(clock * 1.8) * 0.28 + swing
+	var rate := cos(clock * 1.8) * 0.504 + swing_velocity
+	return Vector2(cos(angle), -sin(angle)) * distance * rate
 
 func _physics_process(delta: float) -> void:
 	if not game.interaction_enabled():
@@ -47,6 +56,11 @@ func _physics_process(delta: float) -> void:
 				p.launch(-760.0)
 				cooldown = 0.2
 		"chain":
+			if rider == p and p.chain == self:
+				swing_velocity += Input.get_axis("move_left", "move_right") * delta * 2.4
+				swing_velocity *= exp(-delta * 1.8)
+				swing_velocity = clampf(swing_velocity, -1.2, 1.2)
+				swing = clampf(swing + swing_velocity * delta, -0.45, 0.45)
 			if p.chain == null and cooldown == 0 and Input.is_action_pressed("climb_up"):
 				var body := p.position + Vector2(0, -14)
 				var segment := tip() - global_position

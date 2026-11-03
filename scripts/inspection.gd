@@ -126,7 +126,7 @@ func show_panel() -> void:
 	if game.mode == game.Mode.PLAYING:
 		game.mode = game.Mode.PAUSED
 		game.player.enabled = false
-	room.value = clampi(int(game.player.position.x / TryCourse.CELL) + 1, 1, TryCourse.COUNT)
+	room.value = clampi(TryCourse.number_at(game.player.position.x), 1, TryCourse.COUNT)
 	coordinate_x.value = game.player.position.x
 	coordinate_y.value = game.player.position.y
 	position_label.text = "X %.0f   Y %.0f" % [game.player.position.x, game.player.position.y]
@@ -182,7 +182,7 @@ func go_to_room(number: int) -> bool:
 	if not active or number < 1 or number > TryCourse.COUNT: return false
 	set_flying(false)
 	game.start_run()
-	var target := Vector2((number - 1) * TryCourse.CELL + (100 if number == 1 else 64), TryCourse.FLOOR)
+	var target := Vector2(TryCourse.origin(number) + (100 if number == 1 else 64), TryCourse.FLOOR)
 	replay_finale = number == 40
 	var moved := teleport(target, false, true)
 	after_respawn()
@@ -190,12 +190,12 @@ func go_to_room(number: int) -> bool:
 
 func after_respawn() -> void:
 	if not active or not replay_finale: return
-	var relative_x: float = game.spawn_point.x - 39 * TryCourse.CELL
+	var relative_x: float = game.spawn_point.x - TryCourse.origin(40)
 	if relative_x < 0 or relative_x > 96: return
 	# Room 40 uses room 39's clock. Recreate the elapsed trip from its door.
 	var previous: TryEncounter = game.traps[38]
 	previous.arm()
-	previous.clock = (TryCourse.CELL + 64 - 560) / TryPlayer.SPEED
+	previous.clock = (TryCourse.width(39) + 64 - 560) / TryPlayer.SPEED
 	previous.auxiliary = 0
 	previous.flags.finish = true
 

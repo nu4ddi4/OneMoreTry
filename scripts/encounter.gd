@@ -41,6 +41,7 @@ func make_surface(key: String, rect: Rect2, active: bool = true, belt: float = 0
 	surface.dimensions = rect.size
 	surface.initial_active = active
 	surface.belt_speed = belt
+	surface.camouflaged = key in ["false", "pit", "weak"] and rect.position.y == TryCourse.FLOOR
 	add_child(surface)
 	surfaces[key] = surface
 	return surface
@@ -108,9 +109,9 @@ func _physics_process(delta: float) -> void:
 	if x < -960 or x > 1600:
 		return
 	hazards.clear()
-	var sensor := 208.0 if id == 3 else (192.0 if id == 13 else 112.0)
-	if state == State.DORMANT and x >= sensor and x < 608:
-		if id != 1 or (x >= 180 and x <= 424 and p.position.y < 410):
+	var sensor: float = definition.sensor
+	if state == State.DORMANT and x >= sensor and x < definition.width - 32:
+		if id != 1 or (x >= 160 and x <= 344 and p.position.y < 410):
 			arm()
 	if state != State.DORMANT:
 		clock += delta
@@ -120,7 +121,7 @@ func _physics_process(delta: float) -> void:
 	var started := state != State.DORMANT
 	match id:
 		1:
-			beam(176, 248, started and clock > 0.025)
+			danger(Rect2(176, 304, 168, 18), started and clock > 0.025)
 		2, 38:
 			if x >= 228:
 				flags.crossed = true
@@ -136,9 +137,11 @@ func _physics_process(delta: float) -> void:
 			if started and clock < 0.95:
 				blade(88 + clock * 440)
 		4:
-			collapse("pit", started and clock > 0.2)
-			beam(196, 88, started and clock > 0.3 and clock < 1.25)
-			gate("crusher", 340, started and clock > 1.25)
+			if p.is_on_ceiling() and x > 118 and x < 170 and p.last_vertical_speed < 0:
+				flags.switch = true
+			collapse("pit", started and clock > 0.2 and not flags.get("switch", false))
+			beam(196, 88, started and clock > 0.3 and clock < 1.25 and not flags.get("switch", false))
+			gate("crusher", 340, flags.get("switch", false) or (started and clock > 1.25))
 		5:
 			beam(128, 292)
 			if started and clock > 0.1 and clock < 1.02:
@@ -159,10 +162,11 @@ func _physics_process(delta: float) -> void:
 				offset = maxf(0, offset - (clock - auxiliary) * 100)
 			carrier.position.x = carrier.initial_position.x + offset
 		7:
-			if item_taken and auxiliary < 0:
-				auxiliary = clock
+			if x > 304 and auxiliary < 0: auxiliary = clock
 			if auxiliary >= 0:
-				danger(Rect2(264, minf(336, 176 + pow(maxf(0, clock - auxiliary - 0.1), 2) * 1800), 64, 80), clock - auxiliary < 1.1)
+				danger(Rect2(424, 388, 64, 28), clock - auxiliary > 0.5 and clock - auxiliary < 1.1)
+				if clock - auxiliary > 0.3 and clock - auxiliary < 1.4:
+					blade(224 + (clock - auxiliary - 0.3) * 260)
 		8:
 			if item_taken and auxiliary < 0:
 				auxiliary = clock
@@ -226,15 +230,22 @@ func _physics_process(delta: float) -> void:
 					if samples.size() > n:
 						danger(Rect2(samples[n] - 24, 388, 48, 28), clock >= n * 0.1 + 0.3 and clock < n * 0.1 + 0.4)
 		20:
+			if on_plate(p, 152, 40) and auxiliary < 0: auxiliary = clock
+			var t := clock - auxiliary if auxiliary >= 0 else -1.0
 			for n in 3:
-				danger(Rect2(160 + n * 80, 388, 32, 28), started and clock >= 0.2 + n * 0.267 and clock < 0.3 + n * 0.267)
-			beam(200, 48, started and clock > 0.7 and clock < 1.8)
-			gate("door", 376, started and clock > 1.2)
+				danger(Rect2(160 + n * 80, 388, 32, 28), t >= 0.2 + n * 0.267 and t < 0.3 + n * 0.267)
+			beam(200, 48, t > 0.7 and t < 1.0)
+			gate("door", 376, t > 0.85)
 		21, 22:
-			if started and clock < 1.1:
-				var turn := 0.68 if id == 22 else 0.55
-				var bx := 400 - clock * 600 if clock < 0.55 else 70 + maxf(0, clock - turn) * 600
-				blade(bx, 338 if id == 22 and clock >= turn else 394)
+			# Entry waiting cannot consume the attack. Crossing commits the exchange.
+			if x >= 160 and auxiliary < 0: auxiliary = clock
+			if auxiliary >= 0:
+				var t := clock - auxiliary
+				gate("rear", 120, false)
+				if t < 1.1:
+					var turn := 0.68 if id == 22 else 0.55
+					var bx := 400 - t * 600 if t < 0.55 else 70 + maxf(0, t - turn) * 600
+					blade(bx, 338 if id == 22 and t >= turn else 394)
 		23:
 			gate("a", 208, not started or clock < 1.35)
 			if on_plate(p, 272, 48): held += delta
@@ -242,16 +253,22 @@ func _physics_process(delta: float) -> void:
 			if held >= 0.4: flags.open = true
 			gate("b", 368, flags.get("open", false))
 			danger(Rect2(264, 320, 80, 96), started and clock > 2.2)
+			# The next obstacle continues above the pit rather than returning to flat ground.
 		24:
 			danger(Rect2(344, 200, 96, 18))
-			if on_plate(p, 208, 144) and p.last_vertical_speed >= 340:
+			if on_plate(p, 208, 144) and p.last_vertical_speed >= 340 and not flags.get("broken", false):
 				flags.broken = true
+				surfaces.weak.impacted = true
+				game.sound.effect("crumble")
+				game.burst(p.position, Color("967557"), 14)
+				game.shake = maxf(game.shake, 2.5)
 			collapse("weak", flags.get("broken", false))
 			gate("door", 368, false, 248, 168)
 			if started and clock > 2.5 and clock < 4:
 				blade(112 + (clock - 2.5) * 220)
 		25:
-			danger(Rect2(484, 304, 24, 112), not started or clock < 2.6)
+			if p.is_on_floor() and x > 432 and x < 468 and absf(p.velocity.x) < 35: flags.braked = true
+			danger(Rect2(484, 304, 24, 112), not flags.get("braked", false) and (not started or clock < 2.6))
 		26:
 			if started and clock > 0.2 and clock < 1.8:
 				blade(24 + (clock - 0.2) * 300)
@@ -291,7 +308,8 @@ func _physics_process(delta: float) -> void:
 			else:
 				gate("door", 296, false, 240, 128)
 		31:
-			danger(Rect2(402, 304, 26, 112), not started or clock < 1.8)
+			if p.is_on_floor() and x > 340 and x < 390 and absf(p.velocity.x) < 35: flags.braked = true
+			danger(Rect2(402, 304, 26, 112), not flags.get("braked", false) and (not started or clock < 1.8))
 		32:
 			var boat: TrySurface = surfaces.ferry
 			if x > 190 and not flags.get("departed", false):
@@ -302,7 +320,10 @@ func _physics_process(delta: float) -> void:
 				beam(190, 284, clock - auxiliary > 0.067 and clock - auxiliary < 0.8)
 		33:
 			beam(128, 208)
-			danger(Rect2(240, 388, 64, 28), started and ((clock > 0.2 and clock < 0.3) or (clock > 0.6 and clock < 0.7)))
+			if x >= 208 and auxiliary < 0: auxiliary = clock
+			var t := clock - auxiliary if auxiliary >= 0 else -1.0
+			danger(Rect2(240, 388, 64, 28), (t > 0.2 and t < 0.3) or (t > 0.6 and t < 0.7))
+			gate("exit", 344, t > 0.75)
 		34:
 			if on_plate(p, 220, 60): held += delta
 			if held >= 0.3: flags.lowered = true
@@ -376,12 +397,6 @@ func _draw() -> void:
 		if rect.size.x > 28 and rect.size.y != 28:
 			for x in range(int(rect.position.x) + 5, int(rect.end.x) - 4, 12):
 				draw_line(Vector2(x, rect.position.y + 3), Vector2(x + 6, rect.position.y + 9), Color("f6dbab"), 2)
-	if id in [14, 23, 35, 36]:
-		var positions := [204] if id == 14 else ([272] if id == 23 else ([232,368] if id == 35 else [248]))
-		for x in positions:
-			draw_rect(Rect2(x, 461 if id == 35 else 413, 40, 3), Color("bdac7d"))
-	if id in [11,12]:
-		draw_rect(Rect2(176 if id == 11 else 180, 413, 72, 3), Color("789b8d"))
 	if id == 10:
 		draw_rect(Rect2(272, 240, 48, 320), Color("4b6e67b8"))
 	if id == 39:

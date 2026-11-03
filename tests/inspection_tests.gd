@@ -61,14 +61,14 @@ func run() -> void:
 	for number in range(1,41):
 		check(tools.go_to_room(number), "Room %02d can be selected" % number)
 		await frames(2)
-		var wanted := (number - 1) * TryCourse.CELL + (100 if number == 1 else 64)
+		var wanted := TryCourse.origin(number) + (100 if number == 1 else 64)
 		check(game.player.alive and absf(game.player.position.x-wanted) < 1 and absf(game.player.position.y-416) < 1 and game.spawn_point.x == wanted, "Room %02d has a live restartable entry" % number)
 	check(game.traps[38].auxiliary == 0 and game.traps[38].clock > 0.57, "Final encounter includes the preceding fake-door clock")
 	game.player.die("retry")
 	await frames(52)
 	check(game.player.alive and game.traps[38].auxiliary == 0, "Finale timing is also restored after a retry")
 	check(not tools.go_to_room(0) and not tools.go_to_room(41), "Unknown room numbers are rejected")
-	for target in [Vector2(NAN,416),Vector2(INF,0),Vector2(-1,0),Vector2(25601,0),Vector2(10,5000)]:
+	for target in [Vector2(NAN,416),Vector2(INF,0),Vector2(-1,0),Vector2(TryCourse.LENGTH + 1,0),Vector2(10,5000)]:
 		check(not tools.teleport(target), "Invalid coordinates cannot enter movement state")
 	tools.go_to_room(24)
 	tools.set_flying(true)
@@ -112,7 +112,7 @@ func run() -> void:
 	check(absf(game.player.position.x - game.spawn_point.x) < 1, "Inspection death returns to the selected room")
 	tools.set_flying(true)
 	tools.freeze_world.button_pressed = false
-	tools.teleport(Vector2(23 * 640 + 120,416))
+	tools.teleport(Vector2(TryCourse.origin(24) + 160,416))
 	await frames(8)
 	check(game.traps[23].clock > 0, "Unfreezing devices allows encounter simulation during flight")
 	tools.freeze_world.button_pressed = true
