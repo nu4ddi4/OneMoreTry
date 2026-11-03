@@ -15,25 +15,54 @@ function Assert-Records {
     }
 }
 
-foreach ($phase in @('install', 'reinstall')) {
-    $logPath = Join-Path $PWD "installer-$phase.log"
-    $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$installDir`"", "/LOG=`"$logPath`"")
-    $process = Start-Process -FilePath $installer -ArgumentList $arguments -PassThru -Wait
-    if ($process.ExitCode -ne 0) { throw "Installer $phase exited with $($process.ExitCode)" }
-    foreach ($file in @('OneMoreTry.exe', 'README.txt', 'licenses\Godot.txt', 'licenses\NotoSansCJK.txt', 'unins000.exe')) {
-        if (!(Test-Path (Join-Path $installDir $file))) { throw "Installed file missing: $file" }
+function Invoke-SmokeProcess {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [string]$Phase,
+        [int]$TimeoutSeconds = 120,
+        [string]$StdoutPath = '',
+        [string]$StderrPath = ''
+    )
+    Write-Output "START: $Phase ($TimeoutSeconds seconds maximum)"
+    $options = @{ FilePath = $FilePath; ArgumentList = $ArgumentList; PassThru = $true }
+    if ($StdoutPath) { $options.RedirectStandardOutput = $StdoutPath }
+    if ($StderrPath) { $options.RedirectStandardError = $StderrPath }
+    $process = Start-Process @options
+    if (!$process.WaitForExit($TimeoutSeconds * 1000)) {
+        & taskkill.exe /PID $process.Id /T /F | Out-Host
+        throw "$Phase timed out after $TimeoutSeconds seconds"
     }
-    Assert-Records
-    $process = Start-Process -FilePath (Join-Path $installDir 'OneMoreTry.exe') -ArgumentList '--headless','--audio-driver','Dummy','--quit-after','120','--','--test' -PassThru -Wait -RedirectStandardOutput "installer-$phase-stdout.log" -RedirectStandardError "installer-$phase-stderr.log"
-    if ($process.ExitCode -ne 0) { throw "Installed game exited with $($process.ExitCode)" }
-    $errors = Select-String -Path "installer-$phase-stdout.log","installer-$phase-stderr.log" -Pattern 'SCRIPT ERROR|ERROR:'
-    if ($errors) { throw "Installed game errors: $errors" }
-    Assert-Records
+    # Refresh the process object after waiting to read its final exit status.
+    $process.Refresh()
+    if ($process.ExitCode -ne 0) { throw "$Phase exited with $($process.ExitCode)" }
+    Write-Output "PASS: $Phase"
 }
 
-$uninstallLog = Join-Path $PWD 'installer-uninstall.log'
-$process = Start-Process -FilePath (Join-Path $installDir 'unins000.exe') -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=`"$uninstallLog`"" -PassThru -Wait
-if ($process.ExitCode -ne 0) { throw "Uninstall exited with $($process.ExitCode)" }
-if (Test-Path (Join-Path $installDir 'OneMoreTry.exe')) { throw 'Uninstall left the game executable behind' }
-Assert-Records
-Write-Output 'PASS: install, reinstall, installed game launch, uninstall and saved-record preservation'
+try {
+    foreach ($phase in @('install', 'reinstall')) {
+        $logPath = Join-Path $PWD "installer-$phase.log"
+        $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$installDir`"", "/LOG=`"$logPath`"")
+        Invoke-SmokeProcess -FilePath $installer -ArgumentList $arguments -Phase "$phase installer"
+        foreach ($file in @('OneMoreTry.exe', 'README.txt', 'licenses\Godot.txt', 'licenses\NotoSansCJK.txt', 'unins000.exe')) {
+            if (!(Test-Path (Join-Path $installDir $file))) { throw "Installed file missing: $file" }
+        }
+        Assert-Records
+        Invoke-SmokeProcess -FilePath (Join-Path $installDir 'OneMoreTry.exe') -ArgumentList @('--headless','--audio-driver','Dummy','--quit-after','120','--','--test') -Phase "$phase game launch" -TimeoutSeconds 45 -StdoutPath "installer-$phase-stdout.log" -StderrPath "installer-$phase-stderr.log"
+        $errors = Select-String -Path "installer-$phase-stdout.log","installer-$phase-stderr.log" -Pattern 'SCRIPT ERROR|ERROR:'
+        if ($errors) { throw "Installed game errors: $errors" }
+        Assert-Records
+    }
+
+    $uninstallLog = Join-Path $PWD 'installer-uninstall.log'
+    Invoke-SmokeProcess -FilePath (Join-Path $installDir 'unins000.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=`"$uninstallLog`"") -Phase 'uninstall'
+    if (Test-Path (Join-Path $installDir 'OneMoreTry.exe')) { throw 'Uninstall left the game executable behind' }
+    Assert-Records
+    Write-Output 'PASS: install, reinstall, installed game launch, uninstall and saved-record preservation'
+} finally {
+    # Preserve useful diagnostics even if a child process hangs before exiting.
+    Get-ChildItem -Path $PWD -Filter 'installer-*.log' | ForEach-Object {
+        Write-Output "Log: $($_.Name)"
+        Get-Content -Path $_.FullName -Tail 60 -ErrorAction Continue
+    }
+}
