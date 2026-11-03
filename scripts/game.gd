@@ -8,6 +8,7 @@ const Course = preload("res://scripts/course.gd")
 const RecordsScript = preload("res://scripts/records.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const UpdaterScript = preload("res://scripts/updater.gd")
+const InspectorScript = preload("res://scripts/inspection.gd")
 const INK := Color("203c40")
 const CREAM := Color("f4ecd4")
 const MINT := Color("84dfb7")
@@ -49,6 +50,7 @@ var update_channel: OptionButton
 var update_status: Label
 var version_label: Label
 var quit_dialog: ConfirmationDialog
+var inspector: TryInspector
 var mode_before_fullscreen: DisplayServer.WindowMode = DisplayServer.WINDOW_MODE_WINDOWED
 
 func _ready() -> void:
@@ -78,6 +80,9 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(layout_screen)
 	show_menu()
 	layout_screen()
+	inspector = InspectorScript.new()
+	inspector.game = self
+	add_child(inspector)
 	if OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode:
 		updater.automatic_download = true
 		updater.check_for_updates()
@@ -192,7 +197,7 @@ func build_traps() -> void:
 		traps.append(encounter)
 
 func interaction_enabled() -> bool:
-	return mode == Mode.PLAYING and player != null and player.alive
+	return mode == Mode.PLAYING and player != null and player.alive and not bool(get_meta("inspection_pause_world", false))
 
 func start_run() -> void:
 	mode = Mode.PLAYING
@@ -218,7 +223,7 @@ func start_run() -> void:
 	update_hud()
 
 func _physics_process(delta: float) -> void:
-	if mode == Mode.PLAYING:
+	if mode == Mode.PLAYING and not bool(get_meta("inspection_flying", false)):
 		elapsed += delta
 		if not player.alive:
 			respawn_timer -= delta
@@ -271,7 +276,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			mode_before_fullscreen = window_mode
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	elif update_dialog.visible or quit_dialog.visible:
+	elif update_dialog.visible or quit_dialog.visible or (inspector != null and inspector.is_open()):
 		return
 	elif event.is_action_pressed("mute"):
 		records.data.muted = not records.data.muted
@@ -312,6 +317,8 @@ func respawn() -> void:
 	player.respawn(spawn_point)
 	respawn_timer = 0
 	camera.position.x = camera_x(spawn_point.x + 130)
+	if inspector != null:
+		inspector.after_respawn()
 
 func activate_checkpoint(index: int) -> void:
 	checkpoint_index = index

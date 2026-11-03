@@ -71,6 +71,8 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
       - name: Resolution, UI bounds and dialog resize regression tests
         run: godot --headless --script tests/display_tests.gd -- --test
+      - name: Inspection controls, flight, room travel and record isolation
+        run: godot --headless --fixed-fps 120 --script tests/inspection_tests.gd -- --test
       - name: Forty encounter reset, pause and mechanic contracts
         run: godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
       - name: Wrong-decision physical consequence in all forty encounters
