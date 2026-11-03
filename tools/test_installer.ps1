@@ -29,6 +29,8 @@ function Invoke-SmokeProcess {
     if ($StdoutPath) { $options.RedirectStandardOutput = $StdoutPath }
     if ($StderrPath) { $options.RedirectStandardError = $StderrPath }
     $process = Start-Process @options
+    # Retain the process handle so ExitCode remains available after it exits.
+    $null = $process.Handle
     if (!$process.WaitForExit($TimeoutSeconds * 1000)) {
         & taskkill.exe /PID $process.Id /T /F | Out-Host
         throw "$Phase timed out after $TimeoutSeconds seconds"
