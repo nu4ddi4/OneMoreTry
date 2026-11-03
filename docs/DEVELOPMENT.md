@@ -6,22 +6,20 @@ Godot 4.6.3 Standard와 GDScript를 사용합니다. 소스 편집과 로컬 플
 
 ## 브랜치
 
-- `main`: 검증한 Windows 배포본. `beta`에서 올라오는 PR만 허용합니다.
-- `beta`: 통합 및 플레이 테스트. `feature/*`, `fix/*`, `chore/*`에서 PR을 올립니다.
-- `feature/<기능>`: `beta`의 최신 커밋에서 분기합니다. 예: `feature/course-devices`, `feature/moving-spikes`.
+현재 0.x 개발은 `main`에서 직접 작업하고 검사 후 push합니다. 기능 브랜치, PR, 베타 선행 병합은 필수가 아닙니다. 사용자 요청이 있으면 별도 브랜치나 PR을 사용할 수 있습니다.
 
 ```bash
-git switch beta
-git pull --ff-only origin beta
-git switch -c feature/course-devices
-# 구현 및 검증 후 커밋
-git push -u origin feature/course-devices
-# GitHub에서 base=beta인 PR 생성
+git switch main
+git pull --ff-only origin main
+# 구현 및 관련 검사 후 커밋
+git push origin main
 ```
 
-기능 PR을 `beta`에 병합하고, 통합 검증을 마치면 `beta → main` 배포 PR을 병합합니다. 이력을 보존하는 merge commit을 사용합니다. 배포 후 `main`을 `beta`에 fast-forward로 동기화해 다음 배포 PR에 과거 병합 커밋이 쌓이지 않게 합니다. 이 동기화는 PR이 아닌 브랜치 이동이므로 보호 규칙에서 막히는 경우 `chore/sync-main`을 `main`에서 분기해 `beta`에 PR을 올립니다. 강제 push는 사용하지 않습니다.
+`beta`는 사용자가 별도 미리보기 배포를 원할 때 사용합니다. 메인 변경을 매번 베타와 동기화할 필요는 없습니다. 기존 정식·베타 업데이트 채널과 다운그레이드 방지 규칙은 유지합니다. 강제 push는 사용하지 않습니다.
 
-`Godot Windows` 워크플로가 PR의 방향을 검사하고, 자동 회귀 검사·전체 연속 코스 통과·Windows 내보내기·Windows 네이티브 실행을 검증합니다. 서버 측 강제 보호는 연결 앱의 관리 권한 부족(HTTP 403)으로 미적용 상태입니다. 현재 운영 규칙을 따라 PR로 병합하며, 관리 권한이 있는 CLI에서 `python3 tools/configure_branch_protection.py`를 실행하면 필수 검사와 직접 push 제한을 적용할 수 있습니다. 자세한 결과는 `docs/VALIDATION.md`에 기록합니다.
+`Godot Windows`는 main/beta push와 선택적으로 만든 PR에서 자동 회귀·전체 연속 코스 통과·Windows 내보내기·설치·실행을 검사합니다. push/수동 실행의 모든 검사를 통과한 빌드만 릴리스합니다. PR 검사는 게시하지 않습니다. 기존의 베타 선행 PR 제한은 제거했습니다.
+
+서버 측 브랜치 보호는 연결 앱의 관리 권한 부족(HTTP 403)으로 미적용 상태입니다. `tools/configure_branch_protection.py`는 필요할 때 관리 권한이 있는 CLI에서 실행하며, 직접 push를 허용하고 강제 push·브랜치 삭제를 막는 설정입니다. 자세한 검증 결과는 `docs/VALIDATION.md`에 기록합니다.
 
 ## 실행 및 검사
 
@@ -63,7 +61,7 @@ Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WI
 
 결과는 `build/installer/OneMoreTry-v0.3.1-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
 
-`project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `feature/* → beta → main` PR 순서로 병합하면 두 브랜치 모두 검증 후 자동 릴리스합니다.
+`project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `main`에 직접 push하면 검증 후 정식 릴리스를 자동 게시합니다. 별도 베타 배포가 필요하면 `beta`에 반영해 검증 후 사전 릴리스를 게시합니다.
 
 - `beta`: `v0.3.1-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
 - `main`: `v0.3.1`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
