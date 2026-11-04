@@ -30,6 +30,7 @@ godot --headless --editor --import --quit
 godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/fairness_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses

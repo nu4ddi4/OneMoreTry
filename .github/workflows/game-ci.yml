@@ -71,6 +71,8 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
       - name: Action-driven traps, landing feedback, chain control and migration
         run: godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --test
+      - name: Latch feedback and visible mechanism preparation
+        run: godot --headless --fixed-fps 120 --script tests/fairness_tests.gd -- --test
       - name: Wrong-decision physical consequence in all forty encounters
         run: godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
       - name: Continuous course traversal with normal inputs

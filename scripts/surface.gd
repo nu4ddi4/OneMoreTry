@@ -12,6 +12,7 @@ var shape: CollisionShape2D
 var fallen := 0.0
 var impacted := false
 var camouflaged := false
+var latches := Vector2(-1, -1)
 var game: Node2D
 
 func _ready() -> void:
@@ -46,6 +47,7 @@ func reset() -> void:
 	motion_step = Vector2.ZERO
 	fallen = 0
 	impacted = false
+	if latches.x >= 0: latches = Vector2.ZERO
 	set_active(initial_active)
 
 func _draw() -> void:
@@ -67,6 +69,11 @@ func _draw() -> void:
 	var r := Rect2(Vector2(0, fallen), dimensions)
 	draw_rect(r, Color("967557"))
 	draw_rect(Rect2(r.position, Vector2(dimensions.x, 5)), Color("c7bf91"))
+	if latches.x >= 0:
+		for n in 2:
+			var at := Vector2(13 - latches[n] * 10, 80 + n * 30)
+			draw_rect(Rect2(at, Vector2(16, 6)), Color("48635d"))
+			draw_rect(Rect2(at + Vector2(2, 1), Vector2(12, 2)), Color("d9bf93"))
 	if impacted:
 		draw_polyline(PackedVector2Array([Vector2(12, r.position.y + 2), Vector2(22, r.position.y + 8), Vector2(17, r.end.y), Vector2(36, r.position.y + 7), Vector2(48, r.end.y)]), Color("4c453d"), 2)
 	if belt_speed != 0:
