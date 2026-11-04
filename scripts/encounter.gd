@@ -13,6 +13,8 @@ var item_taken := false
 var surfaces: Dictionary = {}
 var devices: Array[TryDevice] = []
 var hazards: Array[Rect2] = []
+var scenery: Array[Rect2] = []
+var preparations: Array[Dictionary] = []
 var flags: Dictionary = {}
 var samples: Array[float] = []
 var held := 0.0
@@ -42,6 +44,7 @@ func make_surface(key: String, rect: Rect2, active: bool = true, belt: float = 0
 	surface.initial_active = active
 	surface.belt_speed = belt
 	surface.camouflaged = key in ["false", "pit", "weak"] and rect.position.y == TryCourse.FLOOR
+	if id == 35 and key == "exit": surface.latches = Vector2.ZERO
 	add_child(surface)
 	surfaces[key] = surface
 	return surface
@@ -53,6 +56,8 @@ func reset() -> void:
 	flags.clear()
 	samples.clear()
 	hazards.clear()
+	scenery.clear()
+	preparations.clear()
 	held = 0
 	auxiliary = -1
 	previous_floor = false
@@ -85,10 +90,49 @@ func gate(key: String, x: float, opened: bool, y: float = 248, height: float = 1
 		surface.set_active(not opened)
 	danger(Rect2(x, y, 24, height).grow(2), not opened)
 
-func drop(x: float, delay: float, start_y: float = 176, width: float = 56, gravity: float = 1500) -> void:
-	var t := maxf(0, clock - delay)
+func drop(x: float, delay: float, start_y: float = 176, width: float = 56, gravity: float = 1500, moving: bool = true) -> void:
+	# The suspended block exists before it starts falling.
+	var t := maxf(0, clock - delay) if moving else 0.0
 	var y := minf(368, start_y + gravity * t * t / 2.0)
-	danger(Rect2(x, y, width, 48), clock >= delay)
+	danger(Rect2(x, y, width, 48))
+
+func eruption(key: String, rect: Rect2, t: float, start: float, duration: float, preparation: float = 0.2) -> void:
+	if t >= start - preparation and t < start:
+		preparations.append({"rect": rect, "amount": clampf((t - start + preparation) / preparation, 0, 1)})
+		var sound_key := "mechanism:" + key
+		if not flags.has(sound_key):
+			flags[sound_key] = true
+			game.sound.effect("click")
+	danger(rect, t >= start and t < start + duration)
+
+func closing_gate(key: String, x: float, t: float) -> void:
+	if not surfaces.has(key): make_surface(key, Rect2(x, 248, 24, 168), false)
+	var gate_body: TrySurface = surfaces[key]
+	var amount := clampf(t / 0.16, 0, 1)
+	gate_body.position.y = 248 - 168 * (1 - amount)
+	gate_body.set_active(t >= 0)
+	var rect := Rect2(gate_body.position, gate_body.dimensions)
+	if t < 0: scenery.append(rect)
+	else: danger(rect.grow(2))
+
+func lower_latch(key: String, p: TryPlayer) -> void:
+	if flags.get(key, false): return
+	flags[key] = true
+	flags[key + "_time"] = clock
+	game.sound.effect("click")
+	game.burst(p.position, Color("a77954"), 4)
+
+func lower_exit() -> void:
+	var door: TrySurface = surfaces.exit
+	for n in 2:
+		var key: String = ["left", "right"][n]
+		door.latches[n] = clampf((clock - float(flags.get(key + "_time", clock))) / 0.12, 0, 1) if flags.get(key, false) else 0.0
+	if flags.get("left", false) and flags.get("right", false) and not flags.has("exit_time"):
+		flags.exit_time = clock
+	var amount := clampf((clock - float(flags.get("exit_time", clock)) - 0.12) / 0.22, 0, 1) if flags.has("exit_time") else 0.0
+	door.position.y = door.initial_position.y - 216 * amount
+	flags.open = amount >= 1
+	door.queue_redraw()
 
 func on_plate(p: TryPlayer, x: float, width: float, y: float = 416) -> bool:
 	return p.is_on_floor() and absf(p.position.y - y) < 7 and p.position.x - position.x > x and p.position.x - position.x < x + width
@@ -109,6 +153,8 @@ func _physics_process(delta: float) -> void:
 	if x < -960 or x > 1600:
 		return
 	hazards.clear()
+	scenery.clear()
+	preparations.clear()
 	var sensor: float = definition.sensor
 	if state == State.DORMANT and x >= sensor and x < definition.width - 32:
 		if id != 1 or (x >= 160 and x <= 344 and p.position.y < 410):
@@ -121,7 +167,10 @@ func _physics_process(delta: float) -> void:
 	var started := state != State.DORMANT
 	match id:
 		1:
-			danger(Rect2(176, 304, 168, 18), started and clock > 0.025)
+			var amount := clampf(clock / 0.18, 0, 1) if started else 0.0
+			var ceiling := Rect2(176, 280 + amount * 24, 168, 18)
+			if started and clock >= 0.18: danger(ceiling)
+			else: scenery.append(ceiling)
 		2, 38:
 			if x >= 228:
 				flags.crossed = true
@@ -179,11 +228,9 @@ func _physics_process(delta: float) -> void:
 			# Foreground is visual only; the pickup supplies the air jump.
 			pass
 		11:
-			if started:
-				drop(284, 0.2)
+			drop(284, 0.25, 176, 56, 1500, started)
 		12:
-			if started:
-				drop(196, 0.1, 320, 56, 2000)
+			drop(196, 0.2, 320, 56, 2000, started)
 			# The launch pad introduces a new vertical route above the next block.
 		13:
 			collapse("pit", started and clock > 0.2)
@@ -228,12 +275,12 @@ func _physics_process(delta: float) -> void:
 					if samples.size() <= n and clock >= n * 0.1:
 						samples.append(x)
 					if samples.size() > n:
-						danger(Rect2(samples[n] - 24, 388, 48, 28), clock >= n * 0.1 + 0.3 and clock < n * 0.1 + 0.4)
+						eruption("foot:%d" % n, Rect2(samples[n] - 24, 388, 48, 28), clock, n * 0.1 + 0.3, 0.1, 0.22)
 		20:
 			if on_plate(p, 152, 40) and auxiliary < 0: auxiliary = clock
 			var t := clock - auxiliary if auxiliary >= 0 else -1.0
 			for n in 3:
-				danger(Rect2(160 + n * 80, 388, 32, 28), t >= 0.2 + n * 0.267 and t < 0.3 + n * 0.267)
+				eruption("sequence:%d" % n, Rect2(160 + n * 80, 388, 32, 28), t, 0.2 + n * 0.267, 0.1, 0.18)
 			beam(200, 48, t > 0.7 and t < 1.0)
 			gate("door", 376, t > 0.85)
 		21, 22:
@@ -245,7 +292,8 @@ func _physics_process(delta: float) -> void:
 				if t < 1.1:
 					var turn := 0.68 if id == 22 else 0.55
 					var bx := 400 - t * 600 if t < 0.55 else 70 + maxf(0, t - turn) * 600
-					blade(bx, 338 if id == 22 and t >= turn else 394)
+					var rail := lerpf(394, 338, clampf((t - 0.55) / (turn - 0.55), 0, 1)) if id == 22 else 394.0
+					blade(bx, rail)
 		23:
 			gate("a", 208, not started or clock < 1.35)
 			if on_plate(p, 272, 48): held += delta
@@ -322,7 +370,8 @@ func _physics_process(delta: float) -> void:
 			beam(128, 208)
 			if x >= 208 and auxiliary < 0: auxiliary = clock
 			var t := clock - auxiliary if auxiliary >= 0 else -1.0
-			danger(Rect2(240, 388, 64, 28), (t > 0.2 and t < 0.3) or (t > 0.6 and t < 0.7))
+			eruption("reignite:first", Rect2(240, 388, 64, 28), t, 0.2, 0.1, 0.18)
+			eruption("reignite:second", Rect2(240, 388, 64, 28), t, 0.6, 0.1, 0.22)
 			gate("exit", 344, t > 0.75)
 		34:
 			if on_plate(p, 220, 60): held += delta
@@ -332,22 +381,27 @@ func _physics_process(delta: float) -> void:
 			if started and clock > 0.9 and clock < 1.7:
 				blade(24 + (clock - 0.9) * 450)
 		35:
-			if on_plate(p, 232, 40, 464): flags.left = true
-			if on_plate(p, 368, 40, 464): flags.right = true
-			gate("exit", 416, flags.get("left", false) and flags.get("right", false), 248, 216)
+			# A normal walk off the upper ledge must actually touch the first latch.
+			if on_plate(p, 232, 80, 464): lower_latch("left", p)
+			if on_plate(p, 352, 56, 464): lower_latch("right", p)
+			lower_exit()
 			for key in ["left", "right"]:
-				if flags.get(key, false) and not flags.has(key + "_time"): flags[key + "_time"] = clock
 				if flags.has(key + "_time"):
 					var t: float = clock - flags[key + "_time"]
-					danger(Rect2(232 if key == "left" else 368, 408, 32, 56), t > 0.2 and t < 0.5)
+					eruption("latch:" + key, Rect2(232 if key == "left" else 352, 408, 80 if key == "left" else 56, 56), t, 0.5, 0.2, 0.3)
 		36:
 			danger(Rect2(208, 320, 168, 16))
 			if on_plate(p, 248, 48):
 				flags.tripped = true
-				if auxiliary < 0: auxiliary = clock
-			gate("a", 208, not flags.get("tripped", false) or clock - auxiliary < 0.05)
-			gate("b", 340, not flags.get("tripped", false) or clock - auxiliary < 0.05)
-			danger(Rect2(232, 320, 104, 96), auxiliary >= 0 and clock - auxiliary > 0.3)
+				if auxiliary < 0:
+					auxiliary = clock
+					game.sound.effect("click")
+			var t := clock - auxiliary if auxiliary >= 0 else -1.0
+			closing_gate("a", 208, t)
+			closing_gate("b", 340, t)
+			# The overhead press travels from its housing instead of appearing on the player.
+			var press := clampf((t - 0.1) / 0.28, 0, 1)
+			danger(Rect2(232, 208 + press * 112, 104, 96))
 		37:
 			if x > 208 and not flags.get("impact", false):
 				flags.impact = true
@@ -366,27 +420,31 @@ func _physics_process(delta: float) -> void:
 			collapse("pit", auxiliary >= 0 and clock - auxiliary > 0.2)
 		40:
 			var previous: TryEncounter = game.traps[38]
-			if previous.auxiliary >= 0:
-				clock = previous.clock - previous.auxiliary
-				drop(128, 0.15)
+			if previous.auxiliary >= 0: clock = previous.clock - previous.auxiliary
+			drop(128, 0.15, 176, 56, 1500, previous.auxiliary >= 0)
 	for rect in hazards:
 		if p.alive and p.hitbox().intersects(Rect2(position + rect.position, rect.size)):
 			p.die("hazard")
 	previous_floor = p.is_on_floor()
 	queue_redraw()
 
+func draw_teeth(rect: Rect2, amount: float) -> void:
+	var height := maxf(1, rect.size.y * amount)
+	var body := Rect2(rect.position.x, rect.end.y - height, rect.size.x, height)
+	if height > 2: draw_rect(body.grow(-1), Color("cf7866"))
+	for x in range(int(rect.position.x) + 3, int(rect.end.x) - 5, 10):
+		draw_colored_polygon(PackedVector2Array([Vector2(x, rect.end.y), Vector2(x + 4, rect.end.y - height), Vector2(x + 8, rect.end.y)]), Color("f3ca82"))
+
 func _draw() -> void:
-	for rect in hazards:
+	for rect in scenery + hazards:
 		draw_rect(rect, Color("674e57"))
 		if rect.size.y == 22 and rect.size.x <= 28:
 			var center := rect.get_center()
 			draw_circle(center, 9, Color("d9bf93"))
 			draw_arc(center, 5, 0, TAU, 12, Color("edf0ce"), 2)
 			draw_circle(center, 2, Color("67565a"))
-		elif rect.size.y == 28:
-			draw_rect(rect.grow(-2), Color("cf7866"))
-			for x in range(int(rect.position.x) + 3, int(rect.end.x) - 5, 10):
-				draw_colored_polygon(PackedVector2Array([Vector2(x,rect.end.y-2),Vector2(x+4,rect.position.y+2),Vector2(x+8,rect.end.y-2)]), Color("f3ca82"))
+		elif rect.size.y == 28 or (id == 35 and rect.size.y == 56):
+			draw_teeth(rect, 1)
 		elif rect.size.y == 48:
 			draw_rect(rect.grow(-3), Color("b0aaa0"))
 			draw_rect(rect.grow(-8), Color("77857b"))
@@ -394,9 +452,16 @@ func _draw() -> void:
 				draw_rect(Rect2(rect.position+offset,Vector2(3,3)), Color("eee0b3"))
 		else:
 			draw_rect(rect.grow(-3), Color("c99a77"))
-		if rect.size.x > 28 and rect.size.y != 28:
+		if rect.size.x > 28 and rect.size.y != 28 and not (id == 35 and rect.size.y == 56):
 			for x in range(int(rect.position.x) + 5, int(rect.end.x) - 4, 12):
 				draw_line(Vector2(x, rect.position.y + 3), Vector2(x + 6, rect.position.y + 9), Color("f6dbab"), 2)
+	for item in preparations: draw_teeth(item.rect, item.amount)
+	if id == 35:
+		draw_rect(Rect2(410, 240, 6, 232), Color("48635d"))
+		draw_rect(Rect2(440, 240, 6, 232), Color("48635d"))
+		draw_rect(Rect2(410, 238, 36, 8), Color("48635d"))
+		for at in [Vector2(413,244),Vector2(443,244),Vector2(413,466),Vector2(443,466)]:
+			draw_rect(Rect2(at-Vector2(1,1),Vector2(3,3)),Color("c7bf91"))
 	if id == 10:
 		draw_rect(Rect2(272, 240, 48, 320), Color("4b6e67b8"))
 	if id == 39:

@@ -119,6 +119,7 @@ static func definition(number: int) -> Dictionary:
 			d.solids = [rect(208, FLOOR + 48, 88, 18)]
 			d.surfaces = [["pit", rect(220, FLOOR, 60, 16)]]
 		35:
+			d.surfaces = [["exit", rect(416, 248, 24, 216)]]
 			d.gaps = [Vector2(224, 416)]
 			d.solids = [rect(208, FLOOR + 48, 224, 20)]
 			d.devices = [["chain", Vector2(448, 156)]]
