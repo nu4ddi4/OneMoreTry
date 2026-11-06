@@ -43,6 +43,7 @@ public static class UpdaterTests
     {
         Check(Patcher.Compare("0.6.0","0.6.0-beta") > 0 && Patcher.Compare("0.5.9","0.6.0-beta") < 0, "Helper independently orders stable/beta and refuses lower-core versions");
         Reject(() => Patcher.Compare("01.2.3","0.1.0"), "Malformed helper version is rejected");
+        Check(Patcher.ValidateName(@"licenses\Godot.txt") == "licenses/Godot.txt", "Windows ZIP separators normalize to the same strict file allowlist");
         foreach (string name in new[] { "../records.json", "/OneMoreTry.exe", "licenses/../OneMoreTry.exe", "C:/evil.exe", "licenses\\evil.txt", "unins000.exe", "update_settings.cfg" })
             Reject(() => Patcher.ValidateName(name), "Reject unsafe or unrelated entry " + name);
         string valid = WritePackage("valid", "0.6.0", "stable");
@@ -71,6 +72,9 @@ public static class UpdaterTests
         string duplicate = WritePackage("duplicate","0.6.0","stable", z => { using(var w=new StreamWriter(z.CreateEntry("ONEMORETRY.EXE").Open())) w.Write("no"); });
         job = Job(duplicate);
         Reject(() => Patcher.Apply(job, () => {}, () => {}), "Case-insensitive duplicate ZIP entries are rejected");
+        string mixed = WritePackage("mixed","0.6.0","stable", z => { foreach(string n in new[] { "licenses/Godot.txt", @"licenses\Godot.txt" }) using(var w=new StreamWriter(z.CreateEntry(n).Open())) w.Write("duplicate"); });
+        job=Job(mixed);
+        Reject(() => Patcher.Apply(job, () => {}, () => {}), "Mixed separator aliases cannot overwrite the same staged file twice");
         string linked = WritePackage("linked","0.6.0","stable", z => { var e=z.CreateEntry("README.txt"); e.ExternalAttributes=unchecked((int)0xA1FF0000); using(var w=new StreamWriter(e.Open())) w.Write("../escape"); });
         job = Job(linked);
         Reject(() => Patcher.Apply(job, () => {}, () => {}), "Symbolic links inside a ZIP cannot escape the stage");

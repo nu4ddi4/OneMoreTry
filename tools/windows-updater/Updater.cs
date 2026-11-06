@@ -81,8 +81,9 @@ namespace OneMoreTry.Update
         {
             // Exact shipped-file allowlist, including case-insensitive duplicates.
             // No archive entry can target records, settings, shortcuts or uninstaller.
+            name = name.Replace('\\','/');
             if (name.StartsWith("./", StringComparison.Ordinal)) name = name.Substring(2);
-            if (!Allowed.Contains(name) || name.Contains("\\") || name.Contains(":"))
+            if (!Allowed.Contains(name) || name.Contains(":"))
                 throw new InvalidDataException("Unexpected package entry: " + name);
             return name;
         }
@@ -109,7 +110,8 @@ namespace OneMoreTry.Update
                     long expanded = 0;
                     foreach (var entry in zip.Entries)
                     {
-                        if (entry.FullName == "licenses/" || entry.FullName == "./licenses/") continue;
+                        string directoryName = entry.FullName.Replace('\\','/');
+                        if (directoryName == "licenses/" || directoryName == "./licenses/") continue;
                         string name = ValidateName(entry.FullName);
                         if (!seen.Add(name) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000 ||
                             (entry.ExternalAttributes & (int)FileAttributes.ReparsePoint) != 0)
