@@ -1,16 +1,27 @@
 $ErrorActionPreference = 'Stop'
-$compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$references = @('/r:System.IO.Compression.dll', '/r:System.IO.Compression.FileSystem.dll', '/r:System.Runtime.Serialization.dll')
-& $compiler /nologo /target:winexe /out:build/windows/OneMoreTry.Update.exe @references tools/windows-updater/Updater.cs
+$framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
+$compiler = Join-Path $framework 'csc.exe'
+$windowsDir = (Resolve-Path 'build/windows').Path
+$buildDir = (Resolve-Path 'build').Path
+$source = (Resolve-Path 'tools/windows-updater/Updater.cs').Path
+$testSource = (Resolve-Path 'tools/windows-updater/Tests.cs').Path
+$helper = Join-Path $windowsDir 'OneMoreTry.Update.exe'
+$tests = Join-Path $buildDir 'Updater.Tests.exe'
+$references = @('System.IO.Compression.dll', 'System.IO.Compression.FileSystem.dll', 'System.Runtime.Serialization.dll') | ForEach-Object { '/r:' + (Join-Path $framework $_) }
+$arguments = @('/nologo', '/target:winexe', "/out:$helper") + $references + @($source)
+& $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
-& $compiler /nologo /target:exe /main:UpdaterTests /out:build/Updater.Tests.exe @references tools/windows-updater/Updater.cs tools/windows-updater/Tests.cs
+$arguments = @('/nologo', '/target:exe', '/main:UpdaterTests', "/out:$tests") + $references + @($source, $testSource)
+& $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Updater tests compilation failed' }
 $info = Get-Content build/release-info.json -Raw | ConvertFrom-Json
-@{schema=1; version=$info.version; channel=$info.channel} | ConvertTo-Json | Set-Content build/windows/update-manifest.json -Encoding utf8
-'public static class Crash { public static int Main() { return 1; } }' | Set-Content build/Crash.cs
-& $compiler /nologo /target:winexe /out:build/Crash.exe build/Crash.cs
+@{schema=1; version=$info.version; channel=$info.channel} | ConvertTo-Json | Set-Content (Join-Path $windowsDir 'update-manifest.json') -Encoding utf8
+$crashSource = Join-Path $buildDir 'Crash.cs'
+$crashExe = Join-Path $buildDir 'Crash.exe'
+'public static class Crash { public static int Main() { return 1; } }' | Set-Content $crashSource
+& $compiler /nologo /target:winexe "/out:$crashExe" $crashSource
 if ($LASTEXITCODE -ne 0) { throw 'Crash fixture compilation failed' }
-& ./build/Updater.Tests.exe ./build/windows *> updater-native.log
+& $tests $windowsDir *> updater-native.log
 $result = $LASTEXITCODE
 Get-Content updater-native.log
 if ($result -ne 0) { throw 'Native updater tests failed' }
