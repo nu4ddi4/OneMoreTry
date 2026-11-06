@@ -126,7 +126,7 @@ func route() -> void:
 			await jump()
 		4:
 			await go(144 if fast_route else 120)
-			if fast_route: await jump(6, 0)
+			if fast_route: await jump(45, 0)
 			else: await wait_clock(1.4)
 			await go(180, false)
 			await jump()
