@@ -58,6 +58,15 @@ func detach_chain() -> void:
 		chain.rider = null
 	chain = null
 
+func grip_wall_normal() -> Vector2:
+	if not is_on_wall(): return Vector2.ZERO
+	for index in get_slide_collision_count():
+		var contact := get_slide_collision(index)
+		var body = contact.get_collider()
+		if absf(contact.get_normal().x) > 0.7 and body is Node and body.is_in_group(&"climbable_walls"):
+			return contact.get_normal()
+	return Vector2.ZERO
+
 func _physics_process(delta: float) -> void:
 	animation_time += delta
 	land_squash = move_toward(land_squash, 0.0, delta * 5)
@@ -90,13 +99,13 @@ func _physics_process(delta: float) -> void:
 	jump_buffer = maxf(0, jump_buffer - delta)
 	if fresh_jump:
 		jump_buffer = BUFFER_TIME
-	var wall := is_on_wall()
+	var wall_normal := grip_wall_normal()
+	var wall := wall_normal != Vector2.ZERO
 	if jump_buffer > 0 and coyote > 0:
 		launch()
 	elif fresh_jump and wall:
-		var normal := get_wall_normal().x
 		launch()
-		velocity.x = normal * 290
+		velocity.x = wall_normal.x * 290
 		wall_lock = 0.16
 	elif fresh_jump and air_jumps > 0:
 		air_jumps -= 1
@@ -111,7 +120,7 @@ func _physics_process(delta: float) -> void:
 	if direction != 0:
 		facing = direction
 	velocity.y += GRAVITY * delta
-	if wall and wall_lock == 0 and direction * get_wall_normal().x < 0:
+	if wall and wall_lock == 0 and direction * wall_normal.x < 0:
 		if Input.is_action_pressed("climb_up"):
 			velocity.y = minf(velocity.y, -140)
 		elif velocity.y > 65:

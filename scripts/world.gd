@@ -10,15 +10,17 @@ const SECRET := Course.SECRET
 const GOAL := Course.GOAL
 var grounds: Array[Rect2] = []
 var ledges: Array[Rect2] = []
+var climbable_ledges: Array[Rect2] = []
 var game: Node2D
 var font: Font
 var visual_time := 0.0
 
-func add_solid(rect: Rect2) -> void:
+func add_solid(rect: Rect2, climbable: bool = false) -> void:
 	var body := StaticBody2D.new()
 	body.collision_layer = Elements.SOLID_LAYER
 	body.collision_mask = Elements.PLAYER_LAYER
 	body.add_to_group(Elements.family(Elements.Kind.TERRAIN))
+	if climbable: body.add_to_group(&"climbable_walls")
 	var collider := CollisionShape2D.new()
 	var shape := RectangleShape2D.new()
 	shape.size = rect.size
@@ -35,10 +37,12 @@ func _ready() -> void:
 			grounds.append(Rect2(data.x + cursor, FLOOR, gap.x - cursor, 204))
 			cursor = gap.y
 		grounds.append(Rect2(data.x + cursor, FLOOR, data.width - cursor, 204))
-		for local in data.solids:
+		for index in data.solids.size():
+			var local: Rect2 = data.solids[index]
 			ledges.append(Rect2(local.position + Vector2(data.x, 0), local.size))
+			if index in data.climbable_solids: climbable_ledges.append(ledges.back())
 	for rect in grounds + ledges:
-		add_solid(rect)
+		add_solid(rect, rect in climbable_ledges)
 	add_solid(Rect2(-40, -512, 40, 1600))
 	add_solid(Rect2(LENGTH, -512, 40, 1600))
 
@@ -77,6 +81,7 @@ func _draw() -> void:
 	for rect in ledges:
 		if rect.end.x >= left - 32 and rect.position.x <= left + view_size.x + 32:
 			terrain(rect, true)
+			if rect in climbable_ledges: Elements.climb_wall(self,rect)
 	for i in range(maxi(0, int(left / 101) - 1), mini(int(LENGTH / 101), int((left + view_size.x) / 101) + 2)):
 		var x := i * 101 + 37
 		if on_ground(x):

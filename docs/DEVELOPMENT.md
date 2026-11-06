@@ -32,6 +32,7 @@ godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/fairness_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/elements_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/movement_scope_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses
@@ -121,3 +122,5 @@ v0.5.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크
 ## 공통 요소와 Android
 
 요소 종류·그룹·재질·접촉 규칙·머리 공간은 `scripts/elements.gd`와 [요소 규칙](ELEMENT_RULES.md)을 따른다. 지형·발판·장치·위험물을 추가할 때 같은 렌더러와 종류를 사용한다. 플랫폼별 게임 로직을 복제하지 않는다. Android의 추가 입력/기기 검수와 권장 도입 순서는 [Android 검토](ANDROID_PLAN.md)에 정리했다.
+
+벽타기 허용 지형은 `course.gd`의 `climbable_solids`로 지정하며, 실제 측면 콜라이더가 `climbable_walls`에 속할 때만 오르기/벽 점프/감속을 허용한다. 시각 정리만으로 점프 난이도를 바꾸지 않는 기준은 [요소 규칙](ELEMENT_RULES.md)을 따른다.

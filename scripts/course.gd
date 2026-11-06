@@ -30,7 +30,7 @@ static func rect(x: float, y: float, w: float, h: float) -> Rect2:
 	return Rect2(x, y, w, h)
 
 static func definition(number: int) -> Dictionary:
-	var d := {"id": number, "name": NAMES[number - 1], "x": origin(number), "width": width(number), "sensor": 208.0 if number == 3 else (192.0 if number == 13 else 112.0), "gaps": [], "solids": [], "surfaces": [], "devices": []}
+	var d := {"id": number, "name": NAMES[number - 1], "x": origin(number), "width": width(number), "sensor": 208.0 if number == 3 else (192.0 if number == 13 else 112.0), "gaps": [], "solids": [], "climbable_solids": [], "surfaces": [], "devices": []}
 	match number:
 		1:
 			d.solids = [rect(240, FLOOR - 32, 64, 32), rect(448, FLOOR - 64, 48, 64)]
@@ -40,7 +40,7 @@ static func definition(number: int) -> Dictionary:
 			d.surfaces = [["false", rect(298, FLOOR, 100, 18)]]
 		4:
 			d.gaps = [Vector2(196, 284)]
-			d.surfaces = [["pit", rect(196, FLOOR, 88, 18)], ["switch", rect(128, 312, 32, 16), true, 0.0, Elements.Kind.RELAY]]
+			d.surfaces = [["pit", rect(196, FLOOR, 88, 18)], ["switch", rect(128, 344, 32, 16), true, 0.0, Elements.Kind.RELAY]]
 		6:
 			d.gaps = [Vector2(190, 496)]
 			d.surfaces = [["platform", rect(232, FLOOR, 72, 18)]]
@@ -63,6 +63,7 @@ static func definition(number: int) -> Dictionary:
 			d.surfaces = [["pit", rect(184, FLOOR, 96, 18)]]
 		14:
 			d.solids = [rect(344, 224, 32, 192), rect(414, 224, 100, 16)]
+			d.climbable_solids = [0]
 		15:
 			d.gaps = [Vector2(256, 504)]
 			d.surfaces = [["bridge", rect(256, FLOOR, 248, 18), false]]

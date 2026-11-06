@@ -177,12 +177,7 @@ func _physics_process(delta: float) -> void:
 	var started := state != State.DORMANT
 	match id:
 		1:
-			var amount := clampf(clock / 0.18, 0, 1) if started else 0.0
-			var ceiling := Rect2(176, lerpf(Elements.OPENING_STOW_Y,Elements.OPENING_ROOF_Y,amount), Elements.OPENING_ROOF_WIDTH, Elements.ROOF_THICKNESS)
-			if started and clock >= 0.18: danger(ceiling,true,Elements.Kind.BEAM)
-			else:
-				scenery.append(ceiling)
-				visual_kinds[ceiling] = Elements.Kind.BEAM
+			danger(Rect2(176, Elements.OPENING_ROOF_Y, Elements.OPENING_ROOF_WIDTH, Elements.OPENING_ROOF_THICKNESS), started and clock > 0.025, Elements.Kind.BEAM)
 		2, 38:
 			if x >= 228:
 				flags.crossed = true
@@ -242,7 +237,7 @@ func _physics_process(delta: float) -> void:
 		11:
 			drop(284, 0.25, 176, 56, 1500, started)
 		12:
-			drop(196, 0.2, 256, 56, 2000, started)
+			drop(196, 0.2, 320, 56, 2000, started)
 			# The launch pad introduces a new vertical route above the next block.
 		13:
 			collapse("pit", started and clock > 0.2)
@@ -260,7 +255,7 @@ func _physics_process(delta: float) -> void:
 			if auxiliary >= 0:
 				danger(Rect2(196, minf(336, 176 + pow(maxf(0, clock - auxiliary - 0.6), 2) * 1800), 56, 80), clock - auxiliary > 0.6)
 		15, 16:
-			var block := Rect2(188 if id == 15 else 236, 312 if id == 15 else 296, 48, 16)
+			var block := Rect2(188 if id == 15 else 236, 344 if id == 15 else 336, 48, 16)
 			if not surfaces.has("head"):
 				make_surface("head", block, true, 0, Elements.Kind.RELAY)
 			if p.is_on_ceiling() and x > block.position.x - 10 and x < block.end.x + 10 and p.last_vertical_speed < 0:
@@ -271,7 +266,7 @@ func _physics_process(delta: float) -> void:
 				collapse("pit", started and clock > 1.0)
 				if flags.get("head", false):
 					if auxiliary < 0: auxiliary = clock
-					drop(368, auxiliary + 0.1, 208, 72)
+					drop(308, auxiliary + 0.1, 208, 72)
 		17:
 			gate("a", 208, started and (clock < 0.32 or clock > 1.05))
 			gate("b", 328, started and clock > 0.85)
@@ -402,7 +397,7 @@ func _physics_process(delta: float) -> void:
 					var t: float = clock - flags[key + "_time"]
 					eruption("latch:" + key, Rect2(232 if key == "left" else 352, 408, 80 if key == "left" else 56, 56), t, 0.5, 0.2, 0.3)
 		36:
-			beam(208,168)
+			danger(Rect2(208,320,168,16),true,Elements.Kind.BEAM)
 			if on_plate(p, 248, 48):
 				flags.tripped = true
 				if auxiliary < 0:
