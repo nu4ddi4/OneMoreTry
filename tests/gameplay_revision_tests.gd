@@ -57,7 +57,7 @@ func run() -> void:
 	await reset(4)
 	await go(4,144)
 	Input.action_press("jump")
-	await ticks(10)
+	await ticks(28)
 	Input.action_release("jump")
 	check(game.traps[3].flags.get("switch",false) and not game.traps[3].surfaces.crusher.active and game.traps[3].clock < 1.25, "A real head impact opens the first timed passage early")
 	# Landing feedback occurs only after contact, with a clear soft/hard distinction.

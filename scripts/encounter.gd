@@ -1,6 +1,7 @@
 class_name TryEncounter
 extends Node2D
 
+const Elements = preload("res://scripts/elements.gd")
 const Surface = preload("res://scripts/surface.gd")
 const Device = preload("res://scripts/device.gd")
 enum State { DORMANT, ARMED, ACTIVE, SPENT }
@@ -14,6 +15,7 @@ var surfaces: Dictionary = {}
 var devices: Array[TryDevice] = []
 var hazards: Array[Rect2] = []
 var scenery: Array[Rect2] = []
+var visual_kinds: Dictionary = {}
 var preparations: Array[Dictionary] = []
 var flags: Dictionary = {}
 var samples: Array[float] = []
@@ -22,11 +24,12 @@ var auxiliary := -1.0
 var previous_floor := false
 
 func _ready() -> void:
+	add_to_group(&"hazard_sources")
 	process_physics_priority = 10
 	id = definition.id
 	position.x = definition.x
 	for entry in definition.surfaces:
-		make_surface(entry[0], entry[1], entry[2] if entry.size() > 2 else true, entry[3] if entry.size() > 3 else 0.0)
+		make_surface(entry[0], entry[1], entry[2] if entry.size() > 2 else true, entry[3] if entry.size() > 3 else 0.0, entry[4] if entry.size() > 4 else Elements.Kind.PLATFORM)
 	for entry in definition.devices:
 		var device := Device.new()
 		device.kind = entry[0]
@@ -36,15 +39,19 @@ func _ready() -> void:
 		add_child(device)
 		devices.append(device)
 
-func make_surface(key: String, rect: Rect2, active: bool = true, belt: float = 0) -> TrySurface:
+func make_surface(key: String, rect: Rect2, active: bool = true, belt: float = 0, kind: int = Elements.Kind.PLATFORM) -> TrySurface:
 	var surface := Surface.new()
 	surface.game = game
 	surface.position = rect.position
 	surface.dimensions = rect.size
 	surface.initial_active = active
 	surface.belt_speed = belt
+	surface.element_kind = Elements.Kind.BELT if belt != 0 else kind
 	surface.camouflaged = key in ["false", "pit", "weak"] and rect.position.y == TryCourse.FLOOR
-	if id == 35 and key == "exit": surface.latches = Vector2.ZERO
+	if surface.camouflaged: surface.element_kind = Elements.Kind.TERRAIN
+	if id == 35 and key == "exit":
+		surface.latches = Vector2.ZERO
+		surface.element_kind = Elements.Kind.DOOR
 	add_child(surface)
 	surfaces[key] = surface
 	return surface
@@ -57,6 +64,7 @@ func reset() -> void:
 	samples.clear()
 	hazards.clear()
 	scenery.clear()
+	visual_kinds.clear()
 	preparations.clear()
 	held = 0
 	auxiliary = -1
@@ -72,23 +80,24 @@ func arm() -> void:
 		state = State.ARMED
 		clock = 0
 
-func danger(rect: Rect2, active: bool = true) -> void:
+func danger(rect: Rect2, active: bool = true, kind: int = Elements.Kind.CRUSHER) -> void:
 	if active and rect.size.x > 0 and rect.size.y > 0:
 		hazards.append(rect)
+		visual_kinds[rect] = kind
 
 func beam(x: float, width: float, active: bool = true) -> void:
-	danger(Rect2(x, 368, width, 20), active)
+	danger(Rect2(x, Elements.LOW_ROOF_Y, width, Elements.ROOF_THICKNESS), active, Elements.Kind.BEAM)
 
-func blade(x: float, y: float = 394, width: float = 26) -> void:
-	danger(Rect2(x, y, width, 22))
+func blade(x: float, y: float = 394) -> void:
+	danger(Rect2(x,y,26,22),true,Elements.Kind.BLADE)
 
 func gate(key: String, x: float, opened: bool, y: float = 248, height: float = 168) -> void:
 	if not surfaces.has(key):
-		make_surface(key, Rect2(x, y, 24, height), false)
+		make_surface(key, Rect2(x, y, 24, height), false, 0, Elements.Kind.CRUSHER)
 	var surface: TrySurface = surfaces[key]
 	if surface.active == opened:
 		surface.set_active(not opened)
-	danger(Rect2(x, y, 24, height).grow(2), not opened)
+	danger(Rect2(x, y, 24, height), not opened)
 
 func drop(x: float, delay: float, start_y: float = 176, width: float = 56, gravity: float = 1500, moving: bool = true) -> void:
 	# The suspended block exists before it starts falling.
@@ -103,17 +112,17 @@ func eruption(key: String, rect: Rect2, t: float, start: float, duration: float,
 		if not flags.has(sound_key):
 			flags[sound_key] = true
 			game.sound.effect("click")
-	danger(rect, t >= start and t < start + duration)
+	danger(rect, t >= start and t < start + duration, Elements.Kind.TEETH)
 
 func closing_gate(key: String, x: float, t: float) -> void:
-	if not surfaces.has(key): make_surface(key, Rect2(x, 248, 24, 168), false)
+	if not surfaces.has(key): make_surface(key, Rect2(x, 248, 24, 168), false, 0, Elements.Kind.CRUSHER)
 	var gate_body: TrySurface = surfaces[key]
 	var amount := clampf(t / 0.16, 0, 1)
 	gate_body.position.y = 248 - 168 * (1 - amount)
 	gate_body.set_active(t >= 0)
 	var rect := Rect2(gate_body.position, gate_body.dimensions)
 	if t < 0: scenery.append(rect)
-	else: danger(rect.grow(2))
+	else: danger(rect)
 
 func lower_latch(key: String, p: TryPlayer) -> void:
 	if flags.get(key, false): return
@@ -154,6 +163,7 @@ func _physics_process(delta: float) -> void:
 		return
 	hazards.clear()
 	scenery.clear()
+	visual_kinds.clear()
 	preparations.clear()
 	var sensor: float = definition.sensor
 	if state == State.DORMANT and x >= sensor and x < definition.width - 32:
@@ -168,9 +178,11 @@ func _physics_process(delta: float) -> void:
 	match id:
 		1:
 			var amount := clampf(clock / 0.18, 0, 1) if started else 0.0
-			var ceiling := Rect2(176, 280 + amount * 24, 168, 18)
-			if started and clock >= 0.18: danger(ceiling)
-			else: scenery.append(ceiling)
+			var ceiling := Rect2(176, lerpf(Elements.OPENING_STOW_Y,Elements.OPENING_ROOF_Y,amount), Elements.OPENING_ROOF_WIDTH, Elements.ROOF_THICKNESS)
+			if started and clock >= 0.18: danger(ceiling,true,Elements.Kind.BEAM)
+			else:
+				scenery.append(ceiling)
+				visual_kinds[ceiling] = Elements.Kind.BEAM
 		2, 38:
 			if x >= 228:
 				flags.crossed = true
@@ -213,7 +225,7 @@ func _physics_process(delta: float) -> void:
 		7:
 			if x > 304 and auxiliary < 0: auxiliary = clock
 			if auxiliary >= 0:
-				danger(Rect2(424, 388, 64, 28), clock - auxiliary > 0.5 and clock - auxiliary < 1.1)
+				danger(Rect2(424, 388, 64, 28), clock - auxiliary > 0.5 and clock - auxiliary < 1.1, Elements.Kind.TEETH)
 				if clock - auxiliary > 0.3 and clock - auxiliary < 1.4:
 					blade(224 + (clock - auxiliary - 0.3) * 260)
 		8:
@@ -230,7 +242,7 @@ func _physics_process(delta: float) -> void:
 		11:
 			drop(284, 0.25, 176, 56, 1500, started)
 		12:
-			drop(196, 0.2, 320, 56, 2000, started)
+			drop(196, 0.2, 256, 56, 2000, started)
 			# The launch pad introduces a new vertical route above the next block.
 		13:
 			collapse("pit", started and clock > 0.2)
@@ -248,9 +260,9 @@ func _physics_process(delta: float) -> void:
 			if auxiliary >= 0:
 				danger(Rect2(196, minf(336, 176 + pow(maxf(0, clock - auxiliary - 0.6), 2) * 1800), 56, 80), clock - auxiliary > 0.6)
 		15, 16:
-			var block := Rect2(188 if id == 15 else 236, 344 if id == 15 else 336, 48, 16)
+			var block := Rect2(188 if id == 15 else 236, 312 if id == 15 else 296, 48, 16)
 			if not surfaces.has("head"):
-				make_surface("head", block)
+				make_surface("head", block, true, 0, Elements.Kind.RELAY)
 			if p.is_on_ceiling() and x > block.position.x - 10 and x < block.end.x + 10 and p.last_vertical_speed < 0:
 				flags.head = true
 			if id == 15:
@@ -259,7 +271,7 @@ func _physics_process(delta: float) -> void:
 				collapse("pit", started and clock > 1.0)
 				if flags.get("head", false):
 					if auxiliary < 0: auxiliary = clock
-					drop(308, auxiliary + 0.1, 208, 72)
+					drop(368, auxiliary + 0.1, 208, 72)
 		17:
 			gate("a", 208, started and (clock < 0.32 or clock > 1.05))
 			gate("b", 328, started and clock > 0.85)
@@ -303,7 +315,7 @@ func _physics_process(delta: float) -> void:
 			danger(Rect2(264, 320, 80, 96), started and clock > 2.2)
 			# The next obstacle continues above the pit rather than returning to flat ground.
 		24:
-			danger(Rect2(344, 200, 96, 18))
+			danger(Rect2(344, 200, 96, 18), true, Elements.Kind.BEAM)
 			if on_plate(p, 208, 144) and p.last_vertical_speed >= 340 and not flags.get("broken", false):
 				flags.broken = true
 				surfaces.weak.impacted = true
@@ -346,13 +358,13 @@ func _physics_process(delta: float) -> void:
 				lift.position.y = lift.initial_position.y - minf(height, t * 64)
 				if id == 29:
 					gate("door", 296, t > 0.55 and t < 1.4, 240, 128)
-					danger(Rect2(208, 280, 88, 20))
+					danger(Rect2(208, 280, 88, 20), true, Elements.Kind.BEAM)
 				else:
 					gate("door", 296, t >= 0.95 and t < 2.4, 248, 104)
-					danger(Rect2(208, 288, 88, 20))
+					danger(Rect2(208, 288, 88, 20), true, Elements.Kind.BEAM)
 					if t > 2.2:
 						lift.position.y += minf(64, (t - 2.2) * 110)
-						blade(208, 394, 88)
+						danger(Rect2(208,394,88,22),true,Elements.Kind.TEETH)
 			else:
 				gate("door", 296, false, 240, 128)
 		31:
@@ -390,7 +402,7 @@ func _physics_process(delta: float) -> void:
 					var t: float = clock - flags[key + "_time"]
 					eruption("latch:" + key, Rect2(232 if key == "left" else 352, 408, 80 if key == "left" else 56, 56), t, 0.5, 0.2, 0.3)
 		36:
-			danger(Rect2(208, 320, 168, 16))
+			beam(208,168)
 			if on_plate(p, 248, 48):
 				flags.tripped = true
 				if auxiliary < 0:
@@ -423,39 +435,18 @@ func _physics_process(delta: float) -> void:
 			if previous.auxiliary >= 0: clock = previous.clock - previous.auxiliary
 			drop(128, 0.15, 176, 56, 1500, previous.auxiliary >= 0)
 	for rect in hazards:
-		if p.alive and p.hitbox().intersects(Rect2(position + rect.position, rect.size)):
+		if p.alive and Elements.touches(visual_kinds.get(rect, Elements.Kind.CRUSHER),Rect2(position+rect.position,rect.size),p.hitbox()):
 			p.die("hazard")
 	previous_floor = p.is_on_floor()
 	queue_redraw()
 
-func draw_teeth(rect: Rect2, amount: float) -> void:
-	var height := maxf(1, rect.size.y * amount)
-	var body := Rect2(rect.position.x, rect.end.y - height, rect.size.x, height)
-	if height > 2: draw_rect(body.grow(-1), Color("cf7866"))
-	for x in range(int(rect.position.x) + 3, int(rect.end.x) - 5, 10):
-		draw_colored_polygon(PackedVector2Array([Vector2(x, rect.end.y), Vector2(x + 4, rect.end.y - height), Vector2(x + 8, rect.end.y)]), Color("f3ca82"))
-
 func _draw() -> void:
-	for rect in scenery + hazards:
-		draw_rect(rect, Color("674e57"))
-		if rect.size.y == 22 and rect.size.x <= 28:
-			var center := rect.get_center()
-			draw_circle(center, 9, Color("d9bf93"))
-			draw_arc(center, 5, 0, TAU, 12, Color("edf0ce"), 2)
-			draw_circle(center, 2, Color("67565a"))
-		elif rect.size.y == 28 or (id == 35 and rect.size.y == 56):
-			draw_teeth(rect, 1)
-		elif rect.size.y == 48:
-			draw_rect(rect.grow(-3), Color("b0aaa0"))
-			draw_rect(rect.grow(-8), Color("77857b"))
-			for offset in [Vector2(5,5), Vector2(rect.size.x-8,5),Vector2(5,40),Vector2(rect.size.x-8,40)]:
-				draw_rect(Rect2(rect.position+offset,Vector2(3,3)), Color("eee0b3"))
-		else:
-			draw_rect(rect.grow(-3), Color("c99a77"))
-		if rect.size.x > 28 and rect.size.y != 28 and not (id == 35 and rect.size.y == 56):
-			for x in range(int(rect.position.x) + 5, int(rect.end.x) - 4, 12):
-				draw_line(Vector2(x, rect.position.y + 3), Vector2(x + 6, rect.position.y + 9), Color("f6dbab"), 2)
-	for item in preparations: draw_teeth(item.rect, item.amount)
+	for rect in scenery:
+		Elements.hazard(self,rect,visual_kinds.get(rect,Elements.Kind.CRUSHER),1,false)
+	for rect in hazards:
+		Elements.hazard(self,rect,visual_kinds[rect])
+	for item in preparations:
+		Elements.hazard(self,item.rect,Elements.Kind.TEETH,item.amount,false)
 	if id == 35:
 		draw_rect(Rect2(410, 240, 6, 232), Color("48635d"))
 		draw_rect(Rect2(440, 240, 6, 232), Color("48635d"))

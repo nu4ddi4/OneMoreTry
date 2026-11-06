@@ -1,6 +1,7 @@
 class_name TryWorld
 extends Node2D
 
+const Elements = preload("res://scripts/elements.gd")
 const Course = preload("res://scripts/course.gd")
 const LENGTH := Course.LENGTH
 const FLOOR := Course.FLOOR
@@ -15,6 +16,9 @@ var visual_time := 0.0
 
 func add_solid(rect: Rect2) -> void:
 	var body := StaticBody2D.new()
+	body.collision_layer = Elements.SOLID_LAYER
+	body.collision_mask = Elements.PLAYER_LAYER
+	body.add_to_group(Elements.family(Elements.Kind.TERRAIN))
 	var collider := CollisionShape2D.new()
 	var shape := RectangleShape2D.new()
 	shape.size = rect.size
@@ -108,18 +112,7 @@ func cloud(at: Vector2, color: Color) -> void:
 	draw_rect(Rect2(at, Vector2(86, 8)).grow_individual(0, -19, 0, 19), color)
 
 func terrain(rect: Rect2, floating: bool = false) -> void:
-	draw_rect(rect, Color("73594c"))
-	draw_rect(Rect2(rect.position + Vector2(0, 8), Vector2(rect.size.x, 15)), Color("a77954"))
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x, 7)), Color("3e7f66"))
-	draw_rect(Rect2(rect.position, Vector2(rect.size.x, 3)), Color("b7d081"))
-	for x in range(int(rect.position.x) + 4, int(rect.end.x), 20):
-		draw_rect(Rect2(x, rect.position.y + 7, 8, 5 + x % 3), Color("3e7f66"))
-	if not floating:
-		for y in range(int(rect.position.y) + 32, int(rect.end.y), 23):
-			for x in range(int(rect.position.x) + 9, int(rect.end.x) - 5, 32):
-				draw_rect(Rect2(x + (y % 3) * 3, y, 7, 3), Color("88654f"))
-	else:
-		draw_rect(Rect2(rect.position + Vector2(0, rect.size.y - 3), Vector2(rect.size.x, 3)), Color("4c5a47"))
+	Elements.terrain(self,rect,floating)
 
 func bush(at: Vector2) -> void:
 	draw_rect(Rect2(at + Vector2(-22, -17), Vector2(44, 17)), Color("478b6c"))

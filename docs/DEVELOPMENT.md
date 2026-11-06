@@ -31,6 +31,7 @@ godot --headless --fixed-fps 120 --script tests/run_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/course_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/fairness_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/elements_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses
@@ -59,16 +60,16 @@ godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
 Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WINDOWS.txt`를 `README.txt`로, 라이선스를 `licenses` 폴더에 복사한 뒤 컴파일합니다.
 
 ```powershell
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.4.0 /DBaseVersion=0.4.0 installer/OneMoreTry.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.5.0 /DBaseVersion=0.5.0 installer/OneMoreTry.iss
 ./tools/test_installer.ps1  # 일회용 Windows 테스트 환경에서만 실행: 테스트 기록을 생성합니다.
 ```
 
-결과는 `build/installer/OneMoreTry-v0.4.0-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
+결과는 `build/installer/OneMoreTry-v0.5.0-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
 
 `project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `main`에 직접 push하면 검증 후 정식 릴리스를 자동 게시합니다. 별도 베타 배포가 필요하면 `beta`에 반영해 검증 후 사전 릴리스를 게시합니다.
 
-- `beta`: `v0.4.0-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
-- `main`: `v0.4.0`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
+- `beta`: `v0.5.0-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
+- `main`: `v0.5.0`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
 - 같은 버전으로 다시 push하면 기존 공개 릴리스를 변경하지 않습니다. 새 배포에는 숫자 버전을 올립니다. PR 검사는 릴리스를 게시하지 않습니다.
 
 `Godot Windows` Actions는 회귀·전체 통과·실제 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 동일한 EXE와 설치 파일을 게시합니다. ZIP·Setup 각각 SHA-256 파일을 제공합니다. `tools/release_config.py`가 소스/Windows 버전 일치 여부를 검사하고 빌드 때만 채널 버전을 적용합니다. `release-info` artifact로 버전·채널·원본 커밋을 전달해 베타 파일의 정식 게시를 막습니다.
@@ -105,7 +106,7 @@ Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WI
 
 `scripts/sound.gd`, `tools/make_audio.py`: 자체 제작 칩튠 BGM과 효과음. `OneMoreSans.otf`는 SIL OFL의 Noto Sans CJK KR에서 한국어와 사용 문자를 추출한 폰트입니다.
 
-v0.4.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크포인트 2개 외에 구간 전환이나 자동 저장 지점을 생성하지 않습니다. 구체적인 구현과 검증 범위는 `docs/COURSE_IMPLEMENTATION.md`를 따릅니다.
+v0.5.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크포인트 2개 외에 구간 전환이나 자동 저장 지점을 생성하지 않습니다. 구체적인 구현과 검증 범위는 `docs/COURSE_IMPLEMENTATION.md`를 따릅니다.
 
 ## 화면 크기 검증
 
@@ -116,3 +117,7 @@ v0.4.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크
 ## 검증 도구
 
 구간/좌표 이동과 자유 이동은 [검증 모드](INSPECTION.md)를 참조합니다. 키 조합은 인증 수단이 아니며 일반 배포본에도 기능을 포함합니다. 검증 중에는 별도 기록 파일을 사용하고 프로그램 재실행 전까지 정상 기록으로 돌아가지 않습니다.
+
+## 공통 요소와 Android
+
+요소 종류·그룹·재질·접촉 규칙·머리 공간은 `scripts/elements.gd`와 [요소 규칙](ELEMENT_RULES.md)을 따른다. 지형·발판·장치·위험물을 추가할 때 같은 렌더러와 종류를 사용한다. 플랫폼별 게임 로직을 복제하지 않는다. Android의 추가 입력/기기 검수와 권장 도입 순서는 [Android 검토](ANDROID_PLAN.md)에 정리했다.

@@ -1,6 +1,8 @@
 class_name TryPlayer
 extends CharacterBody2D
 
+const Elements = preload("res://scripts/elements.gd")
+
 signal died(reason: String)
 signal jumped
 signal landed(speed: float)
@@ -29,8 +31,8 @@ var last_vertical_speed := 0.0
 var false_impact := 0.0
 
 func _ready() -> void:
-	collision_layer = 2
-	collision_mask = 1
+	collision_layer = Elements.PLAYER_LAYER
+	collision_mask = Elements.SOLID_LAYER
 	platform_floor_layers = 0
 	platform_on_leave = CharacterBody2D.PLATFORM_ON_LEAVE_DO_NOTHING
 	var shape := CollisionShape2D.new()
@@ -119,11 +121,15 @@ func _physics_process(delta: float) -> void:
 	last_vertical_speed = velocity.y
 	move_and_slide()
 	carrier = null
-	if is_on_floor():
-		for index in get_slide_collision_count():
-			var contact := get_slide_collision(index)
-			if contact.get_normal().y < -0.7 and contact.get_collider() is TrySurface:
-				carrier = contact.get_collider()
+	for index in get_slide_collision_count():
+		var contact := get_slide_collision(index)
+		var collider = contact.get_collider()
+		if collider is TrySurface:
+			if collider.lethal:
+				die("hazard")
+				if not alive: return
+			elif is_on_floor() and contact.get_normal().y < -0.7:
+				carrier = collider
 	if is_on_floor() and not was_grounded:
 		land_squash = clampf(last_vertical_speed / 1800.0, 0.1, 0.35)
 		landed.emit(last_vertical_speed)

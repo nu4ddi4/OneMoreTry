@@ -1,6 +1,8 @@
 class_name TryDevice
 extends Node2D
 
+const Elements = preload("res://scripts/elements.gd")
+
 var kind := "double"
 var game: Node2D
 var encounter: Node2D
@@ -11,8 +13,11 @@ var length := 224.0
 var rider: TryPlayer
 var swing := 0.0
 var swing_velocity := 0.0
+var element_kind := Elements.Kind.CHARGE
 
 func _ready() -> void:
+	element_kind = {"double":Elements.Kind.CHARGE,"key":Elements.Kind.KEY,"bait":Elements.Kind.KEY,"pad":Elements.Kind.SPRING,"chain":Elements.Kind.CHAIN}[kind]
+	add_to_group(Elements.family(element_kind))
 	process_physics_priority = 5
 
 func reset() -> void:
@@ -75,17 +80,14 @@ func _draw() -> void:
 	if collected:
 		return
 	match kind:
-		"double":
-			draw_colored_polygon(PackedVector2Array([Vector2(0,-12),Vector2(8,0),Vector2(0,12),Vector2(-8,0)]), Color("80e5e0"))
-			draw_line(Vector2(-3, -5), Vector2(2, -1), Color("f7edcd"), 2)
-		"bait", "key":
-			draw_colored_polygon(PackedVector2Array([Vector2(0,-10),Vector2(4,-3),Vector2(11,0),Vector2(4,4),Vector2(0,11),Vector2(-4,4),Vector2(-11,0),Vector2(-4,-3)]), Color("f3d38a"))
+		"double": Elements.charge(self)
+		"bait", "key": Elements.charge(self,true)
 		"pad":
-			draw_rect(Rect2(-22,-6,44,6), Color("8a6752"))
-			draw_line(Vector2(-17,-7),Vector2(17,-7),Color("b9e0ad"),4)
+			Elements.surface(self,Rect2(-22,-10,44,10),Elements.Kind.PLATFORM)
+			draw_polyline(PackedVector2Array([Vector2(-10,-3),Vector2(-4,-7),Vector2(2,-3),Vector2(8,-7)]),Elements.BRASS,2)
 		"chain":
 			var end := tip() - global_position
 			for i in range(0, int(length), 12):
 				var at := end * (float(i) / length)
-				draw_arc(at, 5, 0, TAU, 8, Color("5d7772"), 2)
-			draw_rect(Rect2(-8,-8,16,10), Color("48635d"))
+				draw_arc(at, 5, 0, TAU, 8, Elements.STEEL_LIGHT, 2)
+			draw_rect(Rect2(-8,-8,16,10), Elements.STEEL_DARK)

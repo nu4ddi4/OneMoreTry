@@ -1,6 +1,8 @@
 class_name TryCourse
 extends RefCounted
 
+const Elements = preload("res://scripts/elements.gd")
+
 const COUNT := 40
 const WIDTHS := [736, 672, 608, 816, 592, 784, 560, 720, 608, 896, 560, 752, 624, 848, 608, 576, 672, 592, 704, 864, 608, 800, 736, 720, 592, 688, 880, 640, 752, 608, 784, 672, 592, 752, 896, 560, 704, 816, 640, 736]
 const OFFSETS := [0, 736, 1408, 2016, 2832, 3424, 4208, 4768, 5488, 6096, 6992, 7552, 8304, 8928, 9776, 10384, 10960, 11632, 12224, 12928, 13792, 14400, 15200, 15936, 16656, 17248, 17936, 18816, 19456, 20208, 20816, 21600, 22272, 22864, 23616, 24512, 25072, 25776, 26592, 27232]
@@ -37,9 +39,8 @@ static func definition(number: int) -> Dictionary:
 			d.solids = [rect(254, FLOOR, 44, 180)]
 			d.surfaces = [["false", rect(298, FLOOR, 100, 18)]]
 		4:
-			d.solids = [rect(128, 344, 32, 16)]
 			d.gaps = [Vector2(196, 284)]
-			d.surfaces = [["pit", rect(196, FLOOR, 88, 18)]]
+			d.surfaces = [["pit", rect(196, FLOOR, 88, 18)], ["switch", rect(128, 312, 32, 16), true, 0.0, Elements.Kind.RELAY]]
 		6:
 			d.gaps = [Vector2(190, 496)]
 			d.surfaces = [["platform", rect(232, FLOOR, 72, 18)]]
@@ -84,7 +85,6 @@ static func definition(number: int) -> Dictionary:
 			d.devices = [["chain", Vector2(480, 160)], ["double", Vector2(568, 230)]]
 			d.solids = [rect(616, 200, 32, 216), rect(648, 200, 40, 16)]
 		24:
-			d.solids = [rect(128, 344, 32, 16)]
 			d.gaps = [Vector2(208, 416)]
 			d.solids = [rect(176, FLOOR + 64, 240, 28)]
 			d.surfaces = [["weak", rect(208, FLOOR, 144, 18)]]
@@ -114,7 +114,6 @@ static func definition(number: int) -> Dictionary:
 		33:
 			d.devices = [["chain", Vector2(480, 160)]]
 		34:
-			d.solids = [rect(128, 344, 32, 16)]
 			d.gaps = [Vector2(220, 280)]
 			d.solids = [rect(208, FLOOR + 48, 88, 18)]
 			d.surfaces = [["pit", rect(220, FLOOR, 60, 16)]]
