@@ -6,12 +6,12 @@ enum Kind { TERRAIN, PLATFORM, BELT, DOOR, RELAY, SPRING, CHAIN, CHARGE, KEY, BL
 const SOLID_LAYER := 1
 const PLAYER_LAYER := 2
 const PLAYER_VISUAL_HEIGHT := 37.0
-const MIN_HEADROOM := 48.0
-const LOW_ROOF_Y := 312.0
-const ROOF_THICKNESS := 16.0
-const OPENING_ROOF_Y := 256.0
-const OPENING_STOW_Y := 224.0
-const OPENING_ROOF_WIDTH := 208.0
+const MIN_HEADROOM := 6.0
+const LOW_ROOF_Y := 352.0
+const ROOF_THICKNESS := 20.0
+const OPENING_ROOF_Y := 304.0
+const OPENING_ROOF_WIDTH := 168.0
+const OPENING_ROOF_THICKNESS := 18.0
 const SOIL := Color("73594c")
 const SOIL_LIGHT := Color("a77954")
 const GRASS := Color("3e7f66")
@@ -104,3 +104,9 @@ static func charge(canvas: Node2D, key: bool = false) -> void:
 	canvas.draw_colored_polygon(PackedVector2Array([Vector2(0,-13),Vector2(9,0),Vector2(0,13),Vector2(-9,0)]),STEEL_DARK)
 	canvas.draw_colored_polygon(PackedVector2Array([Vector2(0,-10),Vector2(6,0),Vector2(0,10),Vector2(-6,0)]),tint)
 	canvas.draw_line(Vector2(-2,-5),Vector2(2,-1),Color("f4ecd4"),2)
+
+static func climb_wall(canvas: Node2D, rect: Rect2) -> void:
+	for x in [rect.position.x, rect.end.x - 5]:
+		canvas.draw_rect(Rect2(x,rect.position.y,5,rect.size.y),STEEL_DARK)
+		for y in range(int(rect.position.y)+8,int(rect.end.y)-4,16):
+			canvas.draw_rect(Rect2(x,y,5,4),STEEL_LIGHT)

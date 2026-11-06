@@ -47,15 +47,7 @@ func run() -> void:
 		await tick(4)
 		match id:
 			1:
-				await go(210)
-				right()
-				await press_jump(10)
-				for n in 120:
-					if game.player.position.x - origin >= 272: stop()
-					await tick()
-					if game.player.is_on_floor(): break
-				stop()
-				await tick(20)
+				await go(232)
 				await press_jump(45)
 			7:
 				await go(228)
