@@ -3,23 +3,25 @@ extends Node
 
 signal changed
 
-const REPOSITORY := "nu4ddi4/side-scroller-game"
+const REPOSITORY := "nu4ddi4/OneMoreTry"
 const LATEST_URL := "https://api.github.com/repos/" + REPOSITORY + "/releases/latest"
 const BETA_URL := "https://api.github.com/repos/" + REPOSITORY + "/releases?per_page=100"
 const DOWNLOAD_BASE := "https://github.com/" + REPOSITORY + "/releases/download/"
-const MAX_INSTALLER_SIZE := 256 * 1024 * 1024
+const MAX_PACKAGE_SIZE := 256 * 1024 * 1024
 const CACHE_DIR := "user://updates"
-enum State { IDLE, CHECKING, CURRENT, AVAILABLE, DOWNLOADING, READY, FAILED }
+enum State { IDLE, CHECKING, CURRENT, AVAILABLE, DOWNLOADING, READY, APPLYING, FAILED }
 
 var state := State.IDLE
 var message := "업데이트"
 var current_version: String = ProjectSettings.get_setting("application/config/version", "0.0.0")
 var release: Dictionary = {}
-var installer_path := ""
+var package_path := ""
 var request: HTTPRequest
 var progress_clock := 0.0
 var channel: String = ProjectSettings.get_setting("application/config/release_channel", "stable")
 var automatic_download := false
+var automatic_updates := true
+var previous_apply_failed := false
 var settings_path: String
 
 func _init(test_mode: bool = false) -> void:
@@ -31,6 +33,9 @@ func _ready() -> void:
 		var saved = settings.get_value("updates", "channel", channel)
 		if saved in ["stable", "beta"]:
 			channel = saved
+		var automatic = settings.get_value("updates", "automatic", true)
+		if automatic is bool: automatic_updates = automatic
+	read_apply_result()
 	request = HTTPRequest.new()
 	request.use_threads = true
 	request.max_redirects = 5
@@ -84,7 +89,7 @@ static func select_release(data: Variant, installed: String, selected_channel: S
 	if not is_newer(version, installed):
 		return {}
 	var tag := "v" + version
-	var filename: String = "OneMoreTry-%s-Windows-x64-Setup.exe" % tag
+	var filename: String = "OneMoreTry-%s-Windows-x64.zip" % tag
 	var assets = data.get("assets")
 	if not assets is Array:
 		return {}
@@ -98,7 +103,7 @@ static func select_release(data: Variant, installed: String, selected_channel: S
 		var checksum: String = digest.substr(7).to_lower()
 		if checksum.length() != 64 or not checksum.is_valid_hex_number():
 			continue
-		if not (byte_count is int or byte_count is float) or byte_count < 1 or byte_count > MAX_INSTALLER_SIZE or byte_count != int(byte_count):
+		if not (byte_count is int or byte_count is float) or byte_count < 1 or byte_count > MAX_PACKAGE_SIZE or byte_count != int(byte_count):
 			continue
 		# Construct the URL ourselves. Release metadata cannot redirect us to another repository.
 		return {"version": tag.substr(1), "filename": filename, "sha256": checksum, "size": int(byte_count), "url": DOWNLOAD_BASE + tag + "/" + filename}
@@ -110,8 +115,11 @@ func feed_url() -> String:
 func set_channel(value: String) -> bool:
 	if value not in ["stable", "beta"]:
 		return false
+	if state == State.APPLYING: return false
 	var settings := ConfigFile.new()
+	settings.load(settings_path)
 	settings.set_value("updates", "channel", value)
+	settings.set_value("updates", "automatic", automatic_updates)
 	if settings.save(settings_path) != OK:
 		request.cancel_request()
 		fail("설정을 저장하지 못했습니다.")
@@ -119,7 +127,7 @@ func set_channel(value: String) -> bool:
 	request.cancel_request()
 	remove_partial()
 	release.clear()
-	installer_path = ""
+	package_path = ""
 	request.download_file = ""
 	channel = value
 	set_status(State.IDLE, "업데이트")
@@ -131,7 +139,7 @@ func set_status(next: State, value: String) -> void:
 	changed.emit()
 
 func check_for_updates() -> void:
-	if state in [State.CHECKING, State.DOWNLOADING, State.READY]:
+	if state in [State.CHECKING, State.DOWNLOADING, State.READY, State.APPLYING]:
 		return
 	release.clear()
 	request.download_file = ""
@@ -148,12 +156,12 @@ func download_update() -> void:
 	if DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CACHE_DIR)) != OK:
 		fail("파일을 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
 		return
-	installer_path = CACHE_DIR.path_join(release.filename)
+	package_path = CACHE_DIR.path_join(release.filename)
 	remove_partial()
-	if verify_installer(installer_path):
+	if verify_package(package_path):
 		mark_ready()
 		return
-	request.download_file = installer_path + ".part"
+	request.download_file = package_path + ".part"
 	request.body_size_limit = release.size
 	request.timeout = 300
 	set_status(State.DOWNLOADING, "다운로드 중")
@@ -195,22 +203,22 @@ func _completed(result: int, response_code: int, _headers: PackedStringArray, bo
 		else:
 			set_status(State.CURRENT, "업데이트가 없습니다. (v%s)" % current_version)
 		return
-	if not verify_installer(installer_path + ".part"):
+	if not verify_package(package_path + ".part"):
 		fail("파일이 손상되었습니다. 다시 다운로드해 주세요.")
 		return
-	if FileAccess.file_exists(installer_path) and DirAccess.remove_absolute(ProjectSettings.globalize_path(installer_path)) != OK:
+	if FileAccess.file_exists(package_path) and DirAccess.remove_absolute(ProjectSettings.globalize_path(package_path)) != OK:
 		fail("파일을 저장하지 못했습니다.")
 		return
-	var error := DirAccess.rename_absolute(ProjectSettings.globalize_path(installer_path + ".part"), ProjectSettings.globalize_path(installer_path))
+	var error := DirAccess.rename_absolute(ProjectSettings.globalize_path(package_path + ".part"), ProjectSettings.globalize_path(package_path))
 	if error != OK:
 		fail("파일을 저장하지 못했습니다.")
 		return
 	mark_ready()
 
 func mark_ready() -> void:
-	set_status(State.READY, "v%s 설치 준비 완료\n설치하면 게임이 종료됩니다." % release.version)
+	set_status(State.READY, "v%s 업데이트 준비 완료\n적용 후 다시 시작합니다." % release.version)
 
-func verify_installer(path: String) -> bool:
+func verify_package(path: String) -> bool:
 	if release.is_empty():
 		return false
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -220,17 +228,76 @@ func verify_installer(path: String) -> bool:
 	file.close()
 	return size == release.size and FileAccess.get_sha256(path) == release.sha256
 
-func launch_installer() -> bool:
-	if state != State.READY or OS.get_name() != "Windows":
+func set_automatic_updates(value: bool) -> bool:
+	if state == State.APPLYING: return false
+	var settings := ConfigFile.new()
+	settings.load(settings_path)
+	settings.set_value("updates", "channel", channel)
+	settings.set_value("updates", "automatic", value)
+	if settings.save(settings_path) != OK:
+		request.cancel_request()
+		fail("설정을 저장하지 못했습니다.")
 		return false
-	# Check again in case the downloaded file changed while the dialog was open.
-	if not verify_installer(installer_path):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(installer_path))
+	automatic_updates = value
+	automatic_download = value
+	if not value: cancel()
+	changed.emit()
+	return true
+
+func read_apply_result() -> void:
+	var result_path := "user://updates/apply-result.json" if not settings_path.contains("test_") else "user://test-apply-result.json"
+	if not FileAccess.file_exists(result_path): return
+	var result = JSON.parse_string(FileAccess.get_file_as_string(result_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(result_path))
+	if result is Dictionary and result.get("success") == false:
+		previous_apply_failed = true
+		state = State.FAILED
+		message = "업데이트를 적용하지 못했습니다. 다시 시도해 주세요."
+
+func acknowledge_restart() -> void:
+	for argument in OS.get_cmdline_user_args():
+		if not argument.begins_with("--update-ready-token="): continue
+		var token := argument.trim_prefix("--update-ready-token=")
+		if token.length() != 32 or not token.is_valid_hex_number(): continue
+		var marker := FileAccess.open(CACHE_DIR.path_join("ready-" + token),FileAccess.WRITE)
+		if marker:
+			marker.store_string(current_version)
+			marker.close()
+
+func prepare_apply() -> String:
+	if state != State.READY or not verify_package(package_path):
 		fail("파일이 변경되었습니다. 다시 다운로드해 주세요.")
+		return ""
+	var install_dir := OS.get_executable_path().get_base_dir()
+	var helper := install_dir.path_join("OneMoreTry.Update.exe")
+	if not FileAccess.file_exists(helper) or not FileAccess.file_exists(install_dir.path_join("update-manifest.json")):
+		fail("업데이트 도구가 없습니다. 최신 버전을 다시 설치해 주세요.")
+		return ""
+	var job_dir := ProjectSettings.globalize_path(CACHE_DIR.path_join("apply-" + str(OS.get_process_id()) + "-" + str(Time.get_ticks_usec())))
+	if DirAccess.make_dir_recursive_absolute(job_dir) != OK or DirAccess.copy_absolute(helper,job_dir.path_join("OneMoreTry.Update.exe")) != OK:
+		fail("업데이트를 준비하지 못했습니다. 저장 공간을 확인해 주세요.")
+		return ""
+	var handoff := FileAccess.open(job_dir.path_join("handoff.json"),FileAccess.WRITE)
+	if handoff == null:
+		fail("업데이트를 준비하지 못했습니다.")
+		return ""
+	handoff.store_string(JSON.stringify({"install_dir":install_dir,"package_path":ProjectSettings.globalize_path(package_path),"current_version":current_version,"version":release.version,"channel":channel,"sha256":release.sha256,"size":release.size,"parent_pid":OS.get_process_id(),"restart_arguments":[]}))
+	handoff.flush()
+	var error := handoff.get_error()
+	handoff.close()
+	if error != OK:
+		fail("업데이트를 준비하지 못했습니다.")
+		return ""
+	return job_dir
+
+func launch_apply() -> bool:
+	if state != State.READY or OS.get_name() != "Windows": return false
+	var job_dir := prepare_apply()
+	if job_dir.is_empty(): return false
+	if OS.create_process(job_dir.path_join("OneMoreTry.Update.exe"),[job_dir.path_join("handoff.json")]) <= 0:
+		fail("업데이트를 시작하지 못했습니다.")
 		return false
-	if OS.create_process(ProjectSettings.globalize_path(installer_path), []) <= 0:
-		fail("설치 파일을 실행하지 못했습니다.")
-		return false
+	set_status(State.APPLYING,"업데이트 적용 중")
 	return true
 
 func cancel() -> void:
@@ -241,8 +308,8 @@ func cancel() -> void:
 	set_status(State.IDLE, "취소했습니다.")
 
 func remove_partial() -> void:
-	if not installer_path.is_empty():
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(installer_path + ".part"))
+	if not package_path.is_empty():
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(package_path + ".part"))
 
 func fail(value: String) -> void:
 	remove_partial()

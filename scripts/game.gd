@@ -48,6 +48,8 @@ var update_dialog: AcceptDialog
 var update_button: Button
 var update_channel: OptionButton
 var update_status: Label
+var update_automatic: CheckButton
+var update_apply_queued := false
 var version_label: Label
 var quit_dialog: ConfirmationDialog
 var inspector: TryInspector
@@ -87,8 +89,9 @@ func _ready() -> void:
 	inspector = InspectorScript.new()
 	inspector.game = self
 	add_child(inspector)
-	if OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode:
-		updater.automatic_download = true
+	updater.acknowledge_restart()
+	if supports_automatic_updates() and updater.automatic_updates and not updater.previous_apply_failed:
+		updater.automatic_download = updater.automatic_updates
 		updater.check_for_updates()
 	get_window().focus_exited.connect(func():
 		if mode == Mode.PLAYING and not test_mode:
@@ -101,7 +104,7 @@ func build_updater() -> void:
 	update_dialog = AcceptDialog.new()
 	update_dialog.title = "업데이트"
 	update_dialog.dialog_hide_on_ok = false
-	update_dialog.min_size = Vector2i(560, 220)
+	update_dialog.min_size = Vector2i(560, 260)
 	var dialog_theme := Theme.new()
 	dialog_theme.default_font = font
 	dialog_theme.default_font_size = 17
@@ -124,6 +127,14 @@ func build_updater() -> void:
 	update_channel.item_selected.connect(func(index: int):
 		if updater.set_channel("stable" if index == 0 else "beta"):
 			updater.check_for_updates())
+	update_automatic = CheckButton.new()
+	update_automatic.text = "자동 업데이트"
+	content.add_child(update_automatic)
+	update_automatic.toggled.connect(func(value: bool):
+		if updater.set_automatic_updates(value) and value:
+			updater.previous_apply_failed = false
+			updater.check_for_updates()
+		refresh_update_ui())
 	update_status = Label.new()
 	update_status.custom_minimum_size = Vector2(520, 60)
 	update_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -149,33 +160,47 @@ func confirm_update() -> void:
 		TryUpdater.State.AVAILABLE:
 			updater.download_update()
 		TryUpdater.State.READY:
-			if not records.save():
-				updater.fail("기록을 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
-			elif updater.launch_installer():
-				get_tree().quit()
+			apply_update(true)
 		_:
 			updater.check_for_updates()
 
 func show_updates() -> void:
 	refresh_update_ui()
-	update_dialog.popup_centered(Vector2i(560, 220))
+	update_dialog.popup_centered(Vector2i(560, 260))
 	if updater.state in [TryUpdater.State.IDLE, TryUpdater.State.FAILED, TryUpdater.State.CURRENT]:
 		updater.check_for_updates()
 
 func refresh_update_ui() -> void:
 	update_status.text = updater.message
 	update_channel.select(1 if updater.channel == "beta" else 0)
+	update_automatic.set_pressed_no_signal(updater.automatic_updates)
+	update_automatic.disabled = updater.state == TryUpdater.State.APPLYING
+	update_channel.disabled = updater.state == TryUpdater.State.APPLYING
 	var action := update_dialog.get_ok_button()
-	action.disabled = updater.state in [TryUpdater.State.CHECKING, TryUpdater.State.DOWNLOADING]
+	action.disabled = updater.state in [TryUpdater.State.CHECKING, TryUpdater.State.DOWNLOADING, TryUpdater.State.APPLYING]
 	match updater.state:
 		TryUpdater.State.AVAILABLE:
 			action.text = "다운로드"
 		TryUpdater.State.READY:
-			action.text = "설치하고 종료"
+			action.text = "적용하고 다시 시작"
 		_:
 			action.text = "다시 확인"
 	if is_instance_valid(update_button):
 		update_button.text = "새 버전" if updater.state in [TryUpdater.State.AVAILABLE, TryUpdater.State.READY] else "업데이트"
+
+func supports_automatic_updates() -> bool:
+	return OS.get_name() == "Windows" and not OS.has_feature("editor") and not test_mode
+
+func can_apply_automatically() -> bool:
+	return supports_automatic_updates() and updater.automatic_updates and not updater.previous_apply_failed and updater.state == TryUpdater.State.READY and mode == Mode.MENU and not update_dialog.visible and not quit_dialog.visible
+
+func apply_update(manual: bool = false) -> void:
+	update_apply_queued = false
+	if updater.state != TryUpdater.State.READY or (not manual and not can_apply_automatically()): return
+	if not records.save():
+		updater.fail("기록을 저장하지 못했습니다. 저장 공간을 확인해 주세요.")
+	elif updater.launch_apply():
+		get_tree().quit()
 
 func configure_input() -> void:
 	var bindings := {"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT], "jump": [KEY_SPACE], "climb_up": [KEY_W, KEY_UP], "climb_down": [KEY_S, KEY_DOWN], "retry": [KEY_R], "pause_game": [KEY_ESCAPE], "fullscreen": [KEY_F11], "mute": [KEY_M]}
@@ -253,6 +278,9 @@ func _physics_process(delta: float) -> void:
 		camera.position.y = 270
 
 func _process(delta: float) -> void:
+	if not update_apply_queued and can_apply_automatically():
+		update_apply_queued = true
+		apply_update.call_deferred()
 	if mode == Mode.PAUSED or mode == Mode.RECORDS:
 		return
 	toast_clock = maxf(0, toast_clock - delta)

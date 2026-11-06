@@ -33,6 +33,7 @@ godot --headless --fixed-fps 120 --script tests/gameplay_revision_tests.gd -- --
 godot --headless --fixed-fps 120 --script tests/fairness_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/elements_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/movement_scope_tests.gd -- --test
+godot --headless --fixed-fps 120 --script tests/auto_update_tests.gd -- --test
 godot --headless --fixed-fps 120 --script tests/wrong_routes.gd -- --test
 godot --headless --fixed-fps 120 --script tests/playthrough.gd -- --test
 godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --pauses
@@ -58,32 +59,36 @@ godot --headless --export-release 'Windows Desktop' build/windows/OneMoreTry.exe
 
 ## 설치 및 릴리스
 
-Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WINDOWS.txt`를 `README.txt`로, 라이선스를 `licenses` 폴더에 복사한 뒤 컴파일합니다.
+Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WINDOWS.txt`를 `README.txt`로, 라이선스를 `licenses` 폴더에 복사한 뒤 컴파일합니다. 수동 배포 폴더에도 `tools/build_windows_updater.ps1`로 교체 도구와 manifest를 먼저 준비합니다.
 
 ```powershell
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.5.0 /DBaseVersion=0.5.0 installer/OneMoreTry.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.6.0 /DBaseVersion=0.6.0 installer/OneMoreTry.iss
 ./tools/test_installer.ps1  # 일회용 Windows 테스트 환경에서만 실행: 테스트 기록을 생성합니다.
 ```
 
-결과는 `build/installer/OneMoreTry-v0.5.0-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
+결과는 `build/installer/OneMoreTry-v0.6.0-Windows-x64-Setup.exe`입니다. 고정 AppId와 사용자별 설치 경로를 사용해 다음 버전 설치 시 갱신합니다. 시작 메뉴·선택형 바탕 화면 바로 가기와 제거 프로그램을 제공합니다. 기록은 Godot의 기존 사용자 데이터 폴더에 두고 제거 시에도 삭제하지 않습니다. 설치 프로그램은 Restart Manager로 실행 중인 게임을 감지하며 재부팅이나 자동 게임 재실행을 요구하지 않습니다. 코드 서명은 현재 미적용입니다.
 
 `project.godot`의 숫자 버전과 `export_presets.cfg`의 파일·제품 버전을 함께 올립니다. `main`에 직접 push하면 검증 후 정식 릴리스를 자동 게시합니다. 별도 베타 배포가 필요하면 `beta`에 반영해 검증 후 사전 릴리스를 게시합니다.
 
-- `beta`: `v0.5.0-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
-- `main`: `v0.5.0`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
+- `beta`: `v0.6.0-beta`처럼 `-beta`가 붙은 GitHub 사전 릴리스. 실행 파일 내부 버전과 설치 파일명에도 같은 접미사를 붙입니다.
+- `main`: `v0.6.0`처럼 정식 릴리스. GitHub의 latest는 정식만 사용합니다.
 - 같은 버전으로 다시 push하면 기존 공개 릴리스를 변경하지 않습니다. 새 배포에는 숫자 버전을 올립니다. PR 검사는 릴리스를 게시하지 않습니다.
 
 `Godot Windows` Actions는 회귀·전체 통과·실제 HTTP 검사, Windows 설치·재설치·실행·제거와 기록 보존을 통과한 동일한 EXE와 설치 파일을 게시합니다. ZIP·Setup 각각 SHA-256 파일을 제공합니다. `tools/release_config.py`가 소스/Windows 버전 일치 여부를 검사하고 빌드 때만 채널 버전을 적용합니다. `release-info` artifact로 버전·채널·원본 커밋을 전달해 베타 파일의 정식 게시를 막습니다.
 
 실패한 배포는 해당 브랜치의 `Godot Windows` 수동 실행으로 재시도합니다. 선택 입력 `release_tag`는 브랜치와 프로젝트 버전에 정확히 맞아야 합니다. `verified_run_id` 복구는 성공한 push/수동 실행의 Windows 검사, 조상 커밋과 동일한 게임 입력, 동일 채널·버전의 manifest를 모두 확인한 뒤 artifact를 재사용합니다. PR 빌드나 다른 채널의 artifact는 사용할 수 없습니다. 로컬 토큰은 앱에 넣지 않습니다.
 
-게임의 **업데이트 → 채널**에서 정식·베타를 선택합니다. 선택은 기록과 별도인 `user://update_settings.cfg`에 저장하며 재실행해도 유지됩니다. 첫 실행 기본값은 설치한 빌드의 채널입니다. Windows 배포본 시작 시 선택 채널을 확인하고 새 버전 설치 파일을 자동 다운로드합니다. 편집기와 `--test`에서는 자동 네트워크 요청을 하지 않습니다. 정식은 GitHub `/releases/latest`, 베타는 `/releases?per_page=100`에서 최신 유효 베타를 고릅니다.
+게임의 **업데이트**에서 정식·베타 채널과 **자동 업데이트**를 고른다. `user://update_settings.cfg`에 두 값을 함께 저장하며 기존 채널 전용 설정도 읽는다. 자동 업데이트 기본값은 켜짐이며 Windows 배포본 실행마다 확인/다운로드한다. 꺼 두면 네트워크 요청 없이 시작하고 업데이트 창에서 수동 확인한다. 편집기와 `--test`는 자동 네트워크/실행을 막는다. 정식은 `/releases/latest`, 베타는 `/releases?per_page=100`에서 선택한다.
 
-버전은 숫자 세 부분을 먼저 비교하고 같은 숫자에서는 `X.Y.Z-beta < X.Y.Z`로 비교합니다. 채널을 전환해도 현재 버전보다 높은 버전만 받습니다. 예를 들어 `0.5.0-beta`에서 정식 `0.4.9`는 받지 않으며 정식 `0.5.0`이 나오면 받습니다. 정식 `0.5.0`에서 베타로 바꾸면 `0.5.1-beta` 이상을 기다립니다. 채널 변경 시 이전 요청·부분 파일·설치 대기를 취소합니다.
+숫자 버전을 우선 비교하고 같은 숫자에서는 `X.Y.Z-beta < X.Y.Z`다. 채널을 전환해도 다운그레이드하지 않는다. 채널 변경은 요청·부분 파일·이전 준비 상태를 취소하고 자동 업데이트 설정은 보존한다.
 
-업데이트는 정확한 태그·설치 파일명·크기·GitHub asset digest를 확인하고 `.part`로 내려받습니다. SHA-256과 크기가 맞으면 `.exe`로 바꿉니다. **설치하고 종료**를 선택하면 기록 저장과 파일 재검증 후 설치 UI를 실행하고 게임을 종료합니다. 셸이나 인증 토큰을 사용하지 않습니다. 403·오프라인·타임아웃·손상 파일은 재시도 가능한 상태로 처리하며 취소 시 부분 파일을 지웁니다.
+0.6.0부터 설치 EXE 대신 `OneMoreTry-vX.Y.Z-Windows-x64.zip`의 정확한 이름·크기·GitHub SHA-256을 확인해 다운로드한다. 설치 파일은 최초 설치와 구버전 부트스트랩을 위해 계속 배포한다. 0.5.1 이하의 이미 설치된 실행 파일에는 ZIP 교체 코드가 없으므로 0.6.0으로 한 번 설치해야 한다. ZIP 배포본도 같은 폴더에서 업데이트하며 설치형으로 바뀌지 않는다.
 
-`tools/test_updater.py`는 로컬 HTTP 서버로 버전 비교, 메타데이터, 정상·변조·불완전·과대 다운로드와 취소를 실제 Godot HTTPRequest로 검증합니다. `tools/test_installer.ps1`는 한글·공백 경로에 설치·재설치하고 실제 EXE를 실행한 뒤 제거하며, 각 단계에서 사용자 기록을 확인합니다. 기존 v0.1.0 사용자는 새 설치 파일을 한 번 수동 실행해야 합니다. ZIP 사용자가 업데이트 설치를 선택하면 설치형이 되며 이후에는 시작 메뉴의 설치본을 실행합니다.
+다운로드가 끝나면 타이틀 메뉴에서 자동 적용한다. 플레이·일시정지·결과·기록 화면과 열린 업데이트/종료 창에서는 적용하지 않는다. 자동 업데이트를 끄면 **적용하고 다시 시작**으로 수동 적용한다. 기록 저장 실패 시 종료/적용을 차단한다.
+
+`OneMoreTry.Update.exe`는 캐시의 별도 경로로 복사해 실행하며 셸/설치 프로그램/관리자 권한을 사용하지 않는다. 게임 종료를 기다리고 ZIP 크기·SHA·버전·채널을 다시 검증한다. 허용된 파일만 임시 추출하고 게임 EXE는 마지막에 원자적으로 교체한다. 기존 파일은 백업하며 새 게임의 초기화 완료 토큰/버전을 확인한 후 확정한다. 복사/재시작/초기화 실패는 이전 파일로 복구하고 이전 게임을 다시 연다. 실패 결과를 다음 실행에서 한 번 소비해 자동 재시작 루프를 막는다. 고정 저장소의 태그와 SHA-256으로 확인한 파일만 사용한다.
+
+네이티브 교체 도구와 ZIP 형식, Windows 실제 재시작·복구 검사는 [자동 업데이트](AUTO_UPDATE.md)를 따른다. CI는 Windows 기본 .NET Framework 컴파일러로 교체 도구를 만들고 검사한 뒤 같은 도구를 설치본/ZIP에 넣는다. `.NET` Godot 버전으로 엔진을 바꾸지 않는다.
 
 ## 구조와 확장
 
@@ -103,11 +108,11 @@ Windows에 Inno Setup 6을 설치하고 위 내보내기 결과에 `docs/PLAY_WI
 
 `scripts/records.gd`: 버전 검사와 형식 검증, 임시 파일을 통한 기록 교체.
 
-`scripts/updater.gd`: GitHub 채널별 버전 확인·다운로드·SHA-256 검증·설치 실행.
+`scripts/updater.gd`: GitHub 채널/자동 설정·ZIP 다운로드·SHA-256 검증·네이티브 교체 도구 인계.
 
 `scripts/sound.gd`, `tools/make_audio.py`: 자체 제작 칩튠 BGM과 효과음. `OneMoreSans.otf`는 SIL OFL의 Noto Sans CJK KR에서 한국어와 사용 문자를 추출한 폰트입니다.
 
-v0.5.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크포인트 2개 외에 구간 전환이나 자동 저장 지점을 생성하지 않습니다. 구체적인 구현과 검증 범위는 `docs/COURSE_IMPLEMENTATION.md`를 따릅니다.
+v0.6.0은 단일 씬에서 40개 구간을 끊김 없이 진행합니다. 체크포인트 2개 외에 구간 전환이나 자동 저장 지점을 생성하지 않습니다. 구체적인 구현과 검증 범위는 `docs/COURSE_IMPLEMENTATION.md`를 따릅니다.
 
 ## 화면 크기 검증
 

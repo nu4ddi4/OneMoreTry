@@ -6,7 +6,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PAYLOAD = b"test installer payload\n"
+PAYLOAD = b"test update payload\n"
 
 
 class Fixture(BaseHTTPRequestHandler):
@@ -19,7 +19,7 @@ class Fixture(BaseHTTPRequestHandler):
         if self.path in ("/metadata", "/betas", "/beta-incomplete"):
             body = json.dumps({
                 "tag_name": "v0.3.0", "draft": False, "prerelease": False,
-                "assets": [{"name": "OneMoreTry-v0.3.0-Windows-x64-Setup.exe",
+                "assets": [{"name": "OneMoreTry-v0.3.0-Windows-x64.zip",
                             "size": len(PAYLOAD),
                             "digest": "sha256:" + hashlib.sha256(PAYLOAD).hexdigest()}],
             }).encode()
@@ -32,7 +32,7 @@ class Fixture(BaseHTTPRequestHandler):
                 for version in ("0.4.0-beta", "0.5.0", "0.5.0-beta", "0.6.0-beta"):
                     entry = json.loads(body)
                     entry.update(tag_name='v' + version, prerelease=version.endswith('-beta'), draft=version == '0.6.0-beta')
-                    entry['assets'][0]['name'] = f'OneMoreTry-v{version}-Windows-x64-Setup.exe'
+                    entry['assets'][0]['name'] = f'OneMoreTry-v{version}-Windows-x64.zip'
                     entries.append(entry)
                 body = json.dumps(entries).encode()
         elif self.path == "/malformed":

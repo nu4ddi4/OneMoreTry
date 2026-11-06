@@ -40,6 +40,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "..\build\windows\OneMoreTry.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\windows\OneMoreTry.Update.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\build\windows\update-manifest.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\windows\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\build\windows\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs
 

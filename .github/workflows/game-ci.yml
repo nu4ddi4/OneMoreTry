@@ -89,6 +89,8 @@ jobs:
         run: godot --headless --fixed-fps 30 --script tests/replay.gd -- --test --fast --pauses
       - name: Update metadata, real HTTP download, verification and cancellation
         run: python3 tools/test_updater.py
+      - name: Automatic update preferences, menu boundary and failure recovery
+        run: godot --headless --fixed-fps 120 --script tests/auto_update_tests.gd -- --test
       - name: Export Windows x64
         run: |
           mkdir -p build/windows
@@ -124,6 +126,10 @@ jobs:
         with:
           name: release-info
           path: build
+      - name: Build and test native ZIP updater with real Godot restart and rollback
+        timeout-minutes: 3
+        shell: pwsh
+        run: ./tools/build_windows_updater.ps1
       - name: Build per-user Windows installer
         shell: pwsh
         run: |
@@ -171,12 +177,18 @@ jobs:
           path: build/installer/*-Setup.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        with:
+          name: OneMoreTry-Windows-ready
+          path: build/windows/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Windows-launch-logs
           path: |
             native-*.log
             installer-*.log
+            updater-*.log
 
   publish:
     name: Publish Windows release
@@ -213,7 +225,7 @@ jobs:
             verified_sha=$(jq -r .head_sha /tmp/verified-run.json)
             jq -e '.name == "Godot Windows" and .path == ".github/workflows/game-ci.yml" and .status == "completed" and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")' /tmp/verified-run.json
             git fetch origin "$verified_sha" --depth=1
-            git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
+            git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer tools/windows-updater tools/build_windows_updater.ps1 docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
             gh api "repos/$GH_REPO/compare/$verified_sha...$GITHUB_SHA" --jq .status | grep -Ex 'ahead|identical'
             gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID/jobs?per_page=100" > /tmp/verified-jobs.json
             jq -e '[.jobs[] | select((.name == "Test & export Windows" or .name == "Windows launch") and .conclusion == "success")] | length == 2' /tmp/verified-jobs.json
@@ -244,7 +256,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: steps.release.outputs.publish == 'true'
         with:
-          name: OneMoreTry-Windows-x64
+          name: OneMoreTry-Windows-ready
           path: package
           run-id: ${{ env.ARTIFACT_RUN_ID }}
           github-token: ${{ github.token }}
@@ -276,6 +288,7 @@ jobs:
           release_api=$(gh release view "$RELEASE_TAG" --json apiUrl --jq .apiUrl)
           gh api "$release_api" > /tmp/uploaded-release.json
           jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
+          jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
           if [[ "$PRERELEASE" == true ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --prerelease=true --latest=false
           else

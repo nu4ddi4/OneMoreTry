@@ -51,7 +51,7 @@ try {
             $logPath = Join-Path $PWD "installer-$installPhase.log"
             $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$installDir`"", "/LOG=`"$logPath`"")
             Invoke-SmokeProcess -FilePath $installer -ArgumentList $arguments -Phase "$installPhase installer"
-            foreach ($file in @('OneMoreTry.exe', 'README.txt', 'licenses\Godot.txt', 'licenses\NotoSansCJK.txt', 'unins000.exe')) {
+            foreach ($file in @('OneMoreTry.exe', 'OneMoreTry.Update.exe', 'update-manifest.json', 'README.txt', 'licenses\Godot.txt', 'licenses\NotoSansCJK.txt', 'unins000.exe')) {
                 if (!(Test-Path (Join-Path $installDir $file))) { throw "Installed file missing: $file" }
             }
             Assert-Records
