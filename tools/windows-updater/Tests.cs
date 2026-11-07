@@ -129,7 +129,8 @@ public static class UpdaterTests
         Thread.Sleep(2200);
         string failedPayload=Path.Combine(root,"failed-payload"); Directory.CreateDirectory(failedPayload);
         foreach(string file in Directory.GetFiles(source)) File.Copy(file,Path.Combine(failedPayload,Path.GetFileName(file)));
-        string next="0.6.1"+(target.Channel=="beta"?"-beta":"");
+        var core=target.Version.Split('-')[0].Split('.');
+        string next=core[0]+"."+core[1]+"."+(int.Parse(core[2])+1)+(target.Channel=="beta"?"-beta":"");
         Json.Write(Path.Combine(failedPayload,Patcher.ManifestFile),new Manifest { Schema=1,Version=next,Channel=target.Channel });
         File.Copy(Path.Combine(source,"..","Crash.exe"),Path.Combine(failedPayload,Patcher.Game),true);
         archive=Path.Combine(root,"native-crash.zip"); ZipFile.CreateFromDirectory(failedPayload,archive);

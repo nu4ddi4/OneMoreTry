@@ -1,0 +1,32 @@
+extends "res://tests/gameplay_revision_tests.gd"
+func run() -> void:
+	game=load("res://scenes/main.tscn").instantiate()
+	root.add_child(game)
+	game.records.path="user://doubt-tests.json"
+	await reset(11)
+	check(game.traps[10].hazards.is_empty() and game.traps[10].scenery.is_empty(),"First weight has no preview before approach")
+	await go(11,190)
+	await ticks(20)
+	check(not game.traps[10].hazards.is_empty(),"Approach reveals the actual first weight")
+	await reset(12)
+	check(not game.traps[11].hazards.is_empty(),"Next weight deliberately starts visible")
+	await go(12,124)
+	await ticks(190)
+	check(game.run_deaths>0,"Waiting at the visible repeat's entrance is fatal")
+	await reset(13)
+	check(not game.traps[12].hazards.is_empty(),"Following obstacle is plainly visible")
+	await go(13,130)
+	game.traps[12].arm()
+	await ticks(150)
+	var trap:TryEncounter=game.traps[12]
+	check(trap.hazards.has(Rect2(184,304,48,112)),"Visible hammer remains real after its movement ends")
+	game.player.respawn(Vector2(TryCourse.origin(13)+196,400))
+	await ticks(2)
+	check(game.run_deaths>0,"Treating the spent hammer as a fake still kills on contact")
+	await reset(11)
+	check(game.traps[10].hazards.is_empty(),"Retry hides the surprise again without randomizing its rule")
+	game.queue_free()
+	await process_frame
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://doubt-tests.json"))
+	print("Doubt sequence: %d checks, %d failures" % [checks,failures])
+	quit(1 if failures else 0)

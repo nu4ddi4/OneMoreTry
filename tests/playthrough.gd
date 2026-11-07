@@ -169,7 +169,7 @@ func route() -> void:
 			await go(194, false, true)
 			await jump(45, -1)
 			await wait_clock(1.0)
-			await go(164)
+			await go(130)
 			await jump()
 		14:
 			await go(224)

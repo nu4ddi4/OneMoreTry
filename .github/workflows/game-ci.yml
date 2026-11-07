@@ -91,6 +91,8 @@ jobs:
         run: python3 tools/test_updater.py
       - name: Automatic update preferences, menu boundary and failure recovery
         run: godot --headless --fixed-fps 120 --script tests/auto_update_tests.gd -- --test
+      - name: Hidden surprise, visible deadline and persistent real obstacle
+        run: godot --headless --fixed-fps 120 --script tests/doubt_tests.gd -- --test
       - name: Export Windows x64
         run: |
           mkdir -p build/windows

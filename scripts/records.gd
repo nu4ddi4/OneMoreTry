@@ -2,7 +2,7 @@ class_name TryRecords
 extends RefCounted
 
 const MAX_SAFE_COUNTER := 9_007_199_254_740_991
-const COURSE_ID := "continuous-40-v4"
+const COURSE_ID := "continuous-40-v5"
 
 var path := "user://records.json"
 var data := {"version": 1, "deaths": 0, "attempts": 0, "clears": 0, "best_time": 0.0, "no_death": false, "secret": false, "music": true, "sfx": true, "muted": false}
