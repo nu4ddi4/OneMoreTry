@@ -235,14 +235,18 @@ func _physics_process(delta: float) -> void:
 			# Foreground is visual only; the pickup supplies the air jump.
 			pass
 		11:
-			drop(284, 0.25, 176, 56, 1500, started)
+			# The first simple weight is a surprise, not a preview of the answer.
+			if started and clock >= 0.25: drop(284, 0.25, 176, 56, 1500)
 		12:
 			drop(196, 0.2, 320, 56, 2000, started)
+			# The visible repeat punishes waiting out every mechanism at its entrance.
+			if started and clock >= 1.4 and clock < 2.4:
+				blade(112 + (clock - 1.4) * 300)
 			# The launch pad introduces a new vertical route above the next block.
 		13:
 			collapse("pit", started and clock > 0.2)
-			if started and clock < 0.72:
-				danger(Rect2(maxf(184, 360 - clock * 280), 304, 48, 112))
+			# Its shape stays honest: even after the rush it is a real obstacle.
+			danger(Rect2(maxf(184, 360 - clock * 280) if started else 360, 304, 48, 112))
 		14:
 			var pressed := on_plate(p, 204, 40)
 			if pressed:
