@@ -98,7 +98,7 @@ func run() -> void:
 	rail.auxiliary = 0
 	rail.clock = 0.6
 	rail._physics_process(0)
-	check(body_at(rail,26,22).position.y > 338 and body_at(rail,26,22).position.y < 394, "The returning blade physically changes rails during its turnaround")
+	check(body_at(rail,26,22).position.x > 400 and body_at(rail,26,22).position.y == 394, "The next wheel visibly approaches from a distant position")
 	await reset(36)
 	await contact(36,270)
 	var press: TryEncounter = game.traps[35]

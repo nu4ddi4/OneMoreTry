@@ -93,6 +93,8 @@ jobs:
         run: godot --headless --fixed-fps 120 --script tests/auto_update_tests.gd -- --test
       - name: Hidden surprise, visible deadline and persistent real obstacle
         run: godot --headless --fixed-fps 120 --script tests/doubt_tests.gd -- --test
+      - name: Distant wheels, summoned forward wall, ceiling and rear chase
+        run: godot --headless --fixed-fps 120 --script tests/wheel_sequence_tests.gd -- --test
       - name: Export Windows x64
         run: |
           mkdir -p build/windows

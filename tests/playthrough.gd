@@ -227,9 +227,9 @@ func route() -> void:
 		21, 22:
 			await go(165)
 			var exchange: TryEncounter = game.traps[room - 1]
-			while not failed and exchange.clock - exchange.auxiliary < (0.12 if room == 21 else 0.25): await tick()
-			await jump(45 if room == 21 else 6, 0)
-			while not failed and exchange.clock - exchange.auxiliary < 1.15: await tick()
+			while not failed and exchange.clock - exchange.auxiliary < (1.3 if room == 21 else 1.4): await tick()
+			await jump(45 if room == 21 else 10, 0)
+			while not failed and exchange.clock - exchange.auxiliary < 2.35: await tick()
 		23:
 			await go(294)
 			await tick(52)

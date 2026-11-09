@@ -296,15 +296,26 @@ func _physics_process(delta: float) -> void:
 			gate("door", 376, t > 0.85)
 		21, 22:
 			# Entry waiting cannot consume the attack. Crossing commits the exchange.
-			if x >= 160 and auxiliary < 0: auxiliary = clock
+			if x >= 160 and x < definition.width - 32 and auxiliary < 0: auxiliary = clock
 			if auxiliary >= 0:
 				var t := clock - auxiliary
 				gate("rear", 120, false)
-				if t < 1.1:
-					var turn := 0.68 if id == 22 else 0.55
-					var bx := 400 - t * 600 if t < 0.55 else 70 + maxf(0, t - turn) * 600
-					var rail := lerpf(394, 338, clampf((t - 0.55) / (turn - 0.55), 0, 1)) if id == 22 else 394.0
-					blade(bx, rail)
+				# Give the approach time to read; the nearby wall changes the jump.
+				if t < 2.25: blade(560 - t * 240)
+				if id == 21:
+					if not flags.has("front_x") and 560 - t * 240 - x <= 150: flags.front_x = x + 48
+					if flags.has("front_x"):
+						gate("front",float(flags.front_x),t >= 2.3)
+						surfaces.front.position.x=float(flags.front_x)
+				else:
+					if x >= 140 and x < 300 and p.last_vertical_speed < 0 and p.position.y < 410:
+						flags.roof = true
+					danger(Rect2(136,320,164,16),flags.get("roof",false),Elements.Kind.BEAM)
+					# Third decision: waiting or repeating the stationary jump loses ground.
+					if x >= 500 and not flags.has("chase_time"): flags.chase_time = clock
+					if flags.has("chase_time"):
+						var chase:float=clock-float(flags.chase_time)
+						danger(Rect2(360+minf(chase*200,340),280,28,136))
 		23:
 			gate("a", 208, not started or clock < 1.35)
 			if on_plate(p, 272, 48): held += delta
