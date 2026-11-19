@@ -146,6 +146,14 @@ func lower_exit() -> void:
 func on_plate(p: TryPlayer, x: float, width: float, y: float = 416) -> bool:
 	return p.is_on_floor() and absf(p.position.y - y) < 7 and p.position.x - position.x > x and p.position.x - position.x < x + width
 
+func brake_wall(p: TryPlayer, landing_x: float, landing_width: float, wall: Rect2) -> void:
+	if auxiliary < 0 and on_plate(p, landing_x, landing_width) and absf(p.velocity.x) < 35:
+		auxiliary = clock
+		game.sound.effect("click")
+	var retracted := smoothstep(0.0, 0.14, clock - auxiliary) if auxiliary >= 0 else 0.0
+	var travel := wall.size.y * retracted
+	danger(Rect2(wall.position + Vector2.DOWN * travel, wall.size - Vector2.DOWN * travel))
+
 func collapse(key: String, value: bool) -> void:
 	var surface: TrySurface = surfaces[key]
 	if value and surface.active:
@@ -337,8 +345,7 @@ func _physics_process(delta: float) -> void:
 			if started and clock > 2.5 and clock < 4:
 				blade(112 + (clock - 2.5) * 220)
 		25:
-			if p.is_on_floor() and x > 432 and x < 468 and absf(p.velocity.x) < 35: flags.braked = true
-			danger(Rect2(484, 304, 24, 112), not flags.get("braked", false) and (not started or clock < 2.6))
+			brake_wall(p, 432, 36, Rect2(484, 304, 24, 112))
 		26:
 			if started and clock > 0.2 and clock < 1.8:
 				blade(24 + (clock - 0.2) * 300)
@@ -378,8 +385,7 @@ func _physics_process(delta: float) -> void:
 			else:
 				gate("door", 296, false, 240, 128)
 		31:
-			if p.is_on_floor() and x > 340 and x < 390 and absf(p.velocity.x) < 35: flags.braked = true
-			danger(Rect2(402, 304, 26, 112), not flags.get("braked", false) and (not started or clock < 1.8))
+			brake_wall(p, 340, 50, Rect2(402, 304, 26, 112))
 		32:
 			var boat: TrySurface = surfaces.ferry
 			if x > 190 and not flags.get("departed", false):
@@ -396,12 +402,21 @@ func _physics_process(delta: float) -> void:
 			eruption("reignite:second", Rect2(240, 388, 64, 28), t, 0.6, 0.1, 0.22)
 			gate("exit", 344, t > 0.75)
 		34:
-			if on_plate(p, 220, 60): held += delta
-			if held >= 0.3: flags.lowered = true
-			collapse("pit", flags.get("lowered", false))
-			gate("exit", 384, started and clock > 1.8)
-			if started and clock > 0.9 and clock < 1.7:
-				blade(24 + (clock - 0.9) * 450)
+			if on_plate(p, 220, 60):
+				if auxiliary < 0:
+					auxiliary = clock
+				held += delta
+				if held >= 0.3 and not flags.has("lowered"):
+					flags.lowered = true
+					game.sound.effect("crumble")
+			else:
+				held = 0
+			var lowered: bool = flags.get("lowered", false)
+			collapse("pit", lowered)
+			var chase_time := clock - auxiliary if auxiliary >= 0 else -1.0
+			if chase_time >= 0.45 and chase_time < 1.3:
+				blade(24 + (chase_time - 0.45) * 450)
+			gate("exit", 384, lowered and chase_time >= 1.3)
 		35:
 			# A normal walk off the upper ledge must actually touch the first latch.
 			if on_plate(p, 232, 80, 464): lower_latch("left", p)

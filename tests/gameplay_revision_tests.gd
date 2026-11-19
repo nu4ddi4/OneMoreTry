@@ -94,10 +94,10 @@ func run() -> void:
 	var records := TryRecords.new(true)
 	records.path = "user://revision-migration.json"
 	var out := FileAccess.open(records.path,FileAccess.WRITE)
-	out.store_string(JSON.stringify({"version":1,"course":"continuous-40-v1","deaths":88,"attempts":12,"clears":3,"best_time":138.4,"no_death":true,"secret":true,"music":false}))
+	out.store_string(JSON.stringify({"version":1,"course":"continuous-40-v6","deaths":88,"attempts":12,"clears":3,"best_time":138.4,"no_death":true,"secret":true,"music":false}))
 	out.close()
 	records.load_records()
-	check(records.data.best_time == 0 and not records.data.no_death and not records.data.secret and records.data.legacy["continuous-40-v1"].best_time == 138.4, "Previous course achievements are archived under their actual course")
+	check(records.data.best_time == 0 and not records.data.no_death and not records.data.secret and records.data.legacy["continuous-40-v6"].best_time == 138.4, "Previous course achievements are archived under their actual course")
 	check(records.data.deaths == 88 and records.data.attempts == 12 and records.data.clears == 3 and not records.data.music, "Lifetime counts and audio preferences survive the course change")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(records.path))
 	game.queue_free()
