@@ -203,6 +203,13 @@ func run() -> void:
 	game._unhandled_input(retry)
 	await frames(2)
 	check(game.player.alive, "Manual retry respawns immediately")
+	game.player.die("fall")
+	var before_retry := game.run_deaths
+	var lifetime_deaths: int = game.records.data.deaths
+	game._unhandled_input(retry)
+	await frames(1)
+	check(game.player.alive and game.player.position.distance_to(game.spawn_point) < 4, "Retry during the death animation returns to the checkpoint on the next tick")
+	check(game.run_deaths == before_retry and game.records.data.deaths == lifetime_deaths, "Skipping a death animation counts the death exactly once")
 	await place(Vector2(TryWorld.GOAL, 416))
 	await frames(3)
 	check(game.mode == OneMoreGame.Mode.CLEAR, "Only the real final exit completes the continuous run")
