@@ -1,6 +1,6 @@
 # 한 번만 더!
 
-**[Windows 다운로드](https://github.com/nu4ddi4/side-scroller-game/releases/latest)**
+**[Windows 다운로드](https://github.com/nu4ddi4/OneMoreTry/releases/latest)**
 
 ![타이틀 화면](docs/images/title.png)
 
@@ -10,7 +10,9 @@
 
 Windows 10/11 x64 · OpenGL 3.3
 
-Debian·Ubuntu amd64용 설치와 업데이트는 [Linux 안내](docs/LINUX_APT.md)를 참고하세요.
+Debian·Ubuntu amd64용 로컬 설치와 이전 APT 등록 삭제는 [Linux 안내](docs/LINUX_APT.md)를 참고하세요.
+
+공통 설치 스크립트는 [Install-OneMoreTry.ps1](https://github.com/nu4ddi4/OneMoreTry/releases/latest/download/Install-OneMoreTry.ps1)입니다. Windows PowerShell 또는 Linux PowerShell 7에서 실행하면 같은 GitHub 릴리스의 정식 EXE 또는 DEB를 설치합니다.
 
 ## 조작
 
