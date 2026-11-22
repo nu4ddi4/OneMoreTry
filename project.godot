@@ -26,7 +26,7 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
 textures/canvas_textures/default_texture_filter=0
-environment/defaults/default_clear_color=Color(0.69, 0.84, 0.86, 1)
+environment/defaults/default_clear_color=Color(0.859, 0.671, 0.4, 1)
 textures/vram_compression/import_etc2_astc=false
 
 [physics]

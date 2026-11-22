@@ -58,7 +58,7 @@ func run() -> void:
         game.start_run()
         await settle()
         check(controls_fit(game.hud, bounds), name + ": HUD and progress track stay inside the viewport")
-        check(absf(game.hud.get_child(0).size.x - (bounds.size.x - 40)) < 1, name + ": HUD adapts to the available width")
+        check(game.pixel_hud.get_global_rect().position.is_equal_approx(Vector2(20, 18)) and game.pixel_hud.size.x < bounds.size.x / 2, name + ": compact HUD is anchored to the upper left")
         if dimensions == Vector2i(2560, 1080):
             await screenshot("04-play-ultrawide")
         game.player.respawn(Vector2(TryWorld.LENGTH - 100, 416))

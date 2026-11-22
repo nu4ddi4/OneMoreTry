@@ -1,6 +1,8 @@
 class_name TryPlayer
 extends CharacterBody2D
 
+const Art = preload("res://scripts/pixel_art.gd")
+const PlayerArt = preload("res://scripts/player_art.gd")
 const Elements = preload("res://scripts/elements.gd")
 
 signal died(reason: String)
@@ -20,6 +22,7 @@ var coyote := 0.0
 var jump_buffer := 0.0
 var jump_cut_available := false
 var animation_time := 0.0
+var stride_distance := 0.0
 var land_squash := 0.0
 var was_grounded := false
 var air_jumps := 0
@@ -31,6 +34,7 @@ var last_vertical_speed := 0.0
 var false_impact := 0.0
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	collision_layer = Elements.PLAYER_LAYER
 	collision_mask = Elements.SOLID_LAYER
 	platform_floor_layers = 0
@@ -68,11 +72,11 @@ func grip_wall_normal() -> Vector2:
 	return Vector2.ZERO
 
 func _physics_process(delta: float) -> void:
-	animation_time += delta
-	land_squash = move_toward(land_squash, 0.0, delta * 5)
 	if not enabled or not alive:
 		queue_redraw()
 		return
+	animation_time += delta
+	land_squash = move_toward(land_squash, 0.0, delta * 5)
 	false_impact = maxf(0, false_impact - delta)
 	wall_lock = maxf(0, wall_lock - delta)
 	var direction := Input.get_axis("move_left", "move_right")
@@ -128,7 +132,12 @@ func _physics_process(delta: float) -> void:
 	if velocity.y > 0:
 		floor_snap_length = 5
 	last_vertical_speed = velocity.y
+	var before_move := position
 	move_and_slide()
+	if is_on_floor() and absf(velocity.x) > 12:
+		stride_distance = fposmod(stride_distance + absf(position.x - before_move.x), 48)
+	else:
+		stride_distance = 0
 	carrier = null
 	for index in get_slide_collision_count():
 		var contact := get_slide_collision(index)
@@ -163,6 +172,8 @@ func respawn(at: Vector2) -> void:
 	air_jumps = 0
 	wall_lock = 0
 	false_impact = 0
+	animation_time = 0
+	stride_distance = 0
 	position = at
 	velocity = Vector2.ZERO
 	coyote = 0
@@ -179,22 +190,36 @@ func hitbox() -> Rect2:
 func _draw() -> void:
 	if not alive or (false_impact > 0 and int(animation_time * 40) % 2 == 0):
 		return
-	if air_jumps > 0:
-		draw_arc(Vector2(0, -19), 23, 0, TAU, 16, Color("80e5e099"), 2)
-	var bob := 1 if is_on_floor() and absf(velocity.x) > 30 and sin(animation_time * 22) > 0 else 0
-	var squat := int(land_squash * 10)
-	draw_rect(Rect2(-13, -3, 26, 4), Color("254a493b"))
-	draw_rect(Rect2(-12, -31 + squat, 24, 26 - squat), Color("233b43"))
-	draw_rect(Rect2(-10, -33 + squat + bob, 20, 27 - squat), Color("6ed6b0"))
-	draw_rect(Rect2(-7, -37 + squat + bob, 5, 6), Color("6ed6b0"))
-	draw_rect(Rect2(3, -37 + squat + bob, 5, 6), Color("6ed6b0"))
-	draw_rect(Rect2(-9, -25 + squat + bob, 18, 14), Color("fff2d3"))
-	var look := int(facing * 2)
-	draw_rect(Rect2(-6 + look, -22 + squat + bob, 3, 5), Color("233b43"))
-	draw_rect(Rect2(2 + look, -22 + squat + bob, 3, 5), Color("233b43"))
-	draw_rect(Rect2(-2 + look, -14 + squat + bob, 4, 2), Color("d68c73"))
-	draw_rect(Rect2(-13, -13 + squat, 5, 6), Color("6ed6b0"))
-	draw_rect(Rect2(8, -13 + squat, 5, 6), Color("6ed6b0"))
-	var stride := 3 if absf(velocity.x) > 30 and sin(animation_time * 22) > 0 else 0
-	draw_rect(Rect2(-10, -7, 7, 7 - stride), Color("233b43"))
-	draw_rect(Rect2(3, -7, 7, 4 + stride), Color("233b43"))
+	var look := facing
+	var bob := 0.0
+	var feet := [0, 0, 0, 0]
+	var hands := [Vector2(-12, -14), Vector2(10, -14)]
+	if chain:
+		var grip := Art.snap(chain.tip(chain_distance) + Vector2(0, -14) - global_position)
+		hands = [Vector2(grip.x * look - 4, grip.y), Vector2(grip.x * look, grip.y - 4)]
+		var step := 2 if int(chain_distance / 10) % 2 == 0 else 4
+		feet = [-2, 2, -step, -6 + step]
+	elif enabled and not is_on_floor():
+		var wall_normal := grip_wall_normal()
+		if wall_normal.x != 0 and velocity.y >= -160:
+			look = -wall_normal.x
+			hands = [Vector2(8, -24), Vector2(8, -16)]
+			feet = [0, 2, -6, -2]
+		elif velocity.y < -90:
+			hands = [Vector2(-12, -18), Vector2(10, -22)]
+			feet = [2, -2, -2, -6]
+		elif velocity.y <= 90:
+			hands = [Vector2(-14, -16), Vector2(12, -18)]
+			feet = [2, -2, -6, -4]
+		else:
+			hands = [Vector2(-14, -20), Vector2(12, -22)]
+			feet = [0, -2, 0, -2]
+	elif land_squash > 0.10 and enabled:
+		bob = clampf(snappedf(land_squash * 12, Art.DOT), 0, 4)
+		hands = [Vector2(-14, -16), Vector2(12, -16)]
+	elif is_on_floor() and absf(velocity.x) > 12:
+		var frame := int(stride_distance / 8)
+		feet = PlayerArt.RUN_FEET[frame]
+		bob = PlayerArt.RUN_BOB[frame]
+		hands = [Vector2(-10 + feet[0], -14), Vector2(8 + feet[1], -14)]
+	PlayerArt.draw_pose(self, look, bob, feet, hands, air_jumps > 0)

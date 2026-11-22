@@ -1,6 +1,8 @@
 class_name TryWorld
 extends Node2D
 
+const Art = preload("res://scripts/pixel_art.gd")
+const OBSERVATORY = preload("res://assets/art/brass_observatory.png")
 const Elements = preload("res://scripts/elements.gd")
 const Course = preload("res://scripts/course.gd")
 const LENGTH := Course.LENGTH
@@ -30,6 +32,7 @@ func add_solid(rect: Rect2, climbable: bool = false) -> void:
 	add_child(body)
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	font = load("res://assets/fonts/OneMoreSans.otf")
 	for data in Course.all():
 		var cursor := 0.0
@@ -47,7 +50,8 @@ func _ready() -> void:
 	add_solid(Rect2(LENGTH, -512, 40, 1600))
 
 func _process(delta: float) -> void:
-	visual_time += delta
+	if game.world_animation_enabled():
+		visual_time += delta
 	queue_redraw()
 
 func _draw() -> void:
@@ -57,21 +61,36 @@ func _draw() -> void:
 	var top := center.y - view_size.y / 2.0
 	# Include the camera shake margin so a resized window never exposes clear color.
 	var route_tint := clampf(center.x / LENGTH, 0, 1)
-	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Color("b9dedb").lerp(Color("9da5b6"), route_tint))
-	draw_rect(Rect2(left - 8, 200, view_size.x + 16, 180), Color("b0d7d1"))
-	# All scenery uses a deliberately limited palette and integer pixel steps.
-	for i in range(-1, ceili(view_size.x / 221.0) + 2):
-		var x := left + i * 221.0 + fposmod(-left * 0.13 + visual_time * 2, 221.0) - 180
-		var y := 100 + (i % 3) * 33
-		cloud(Vector2(int(x), y), Color("edf0d4"))
-	for layer in range(3):
-		var spacing := 250.0 + layer * 80
+	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Art.SKY.lerp(Art.HAZE, route_tint))
+	var sky_tone := Art.FAR.lerp(Art.NIGHT_FAR, route_tint)
+	var sun := Art.snap(Vector2(left + view_size.x * 0.22, 132))
+	for row in range(-24, 24, 2):
+		var half := snappedf(sqrt(576 - row * row), Art.DOT)
+		Art.block(self, sun + Vector2(-half, row), Vector2(half * 2, 2), Art.CLOUD)
+	for i in range(-1, ceili(view_size.x / 250.0) + 2):
+		var x := left + i * 250.0 + fposmod(-left * 0.12 + visual_time * 2, 250.0) - 140
+		cloud(Art.snap(Vector2(x, 106 + posmod(i, 3) * 36)))
+	for layer in 3:
+		var spacing := 264 + layer * 72
+		var tone: Color = [Art.FAR, Art.MID, Art.NEAR][layer]
+		var late_tone: Color = [Art.NIGHT_FAR, Art.NIGHT_MID, Art.NIGHT_NEAR][layer]
 		for i in range(-1, ceili(view_size.x / spacing) + 2):
 			var x := left + i * spacing + fposmod(-left * (0.16 + layer * 0.12), spacing) - spacing
-			var y := 248 + layer * 37 + (i % 2) * 17
-			var tint: Color = [Color("9bc6bc"), Color("80b8a2"), Color("64a58e")][layer]
-			var points := PackedVector2Array([Vector2(x, 440), Vector2(x, y + 50), Vector2(x + 24, y + 50), Vector2(x + 24, y + 27), Vector2(x + 58, y + 27), Vector2(x + 58, y + 10), Vector2(x + 86, y + 10), Vector2(x + 86, y), Vector2(x + 140, y), Vector2(x + 140, y + 16), Vector2(x + 180, y + 16), Vector2(x + 180, y + 40), Vector2(x + spacing, y + 40), Vector2(x + spacing, 440)])
-			draw_colored_polygon(points, tint)
+			var y := 246 + layer * 46 + posmod(i, 2) * 18
+			ridge(Art.snap(Vector2(x, y)), spacing, tone.lerp(late_tone, route_tint))
+	var landmark_size := Vector2(OBSERVATORY.get_size()) * 3
+	var landmark_spacing := view_size.x + 320
+	var offset := fposmod(left * 0.18, landmark_spacing)
+	var first_landmark := left + view_size.x - landmark_size.x * 0.90 - offset
+	for i in 2:
+		var landmark_at := Art.snap(Vector2(first_landmark + i * landmark_spacing, 398 - landmark_size.y))
+		if landmark_at.x < left + view_size.x and landmark_at.x + landmark_size.x > left:
+			draw_texture_rect(OBSERVATORY, Rect2(landmark_at, landmark_size), false)
+	var bottom := top + view_size.y + 8
+	if bottom > FLOOR:
+		Art.block(self, Vector2(left - 8, 440), Vector2(view_size.x + 16, maxf(0, bottom - 440)), sky_tone)
+	if game.title_visible():
+		title_masonry(center.x)
 	for rect in grounds:
 		if rect.end.x < left - 32 or rect.position.x > left + view_size.x + 32:
 			continue
@@ -82,8 +101,8 @@ func _draw() -> void:
 		if rect.end.x >= left - 32 and rect.position.x <= left + view_size.x + 32:
 			terrain(rect, true)
 			if rect in climbable_ledges: Elements.climb_wall(self,rect)
-	for i in range(maxi(0, int(left / 101) - 1), mini(int(LENGTH / 101), int((left + view_size.x) / 101) + 2)):
-		var x := i * 101 + 37
+	for i in range(maxi(0, int(left / 100) - 1), mini(int(LENGTH / 100), int((left + view_size.x) / 100) + 2)):
+		var x := i * 100 + 36
 		if on_ground(x):
 			grass(Vector2(x, FLOOR), i)
 	for n in range(Course.number_at(left) - 1, Course.number_at(left + view_size.x)):
@@ -93,12 +112,11 @@ func _draw() -> void:
 		flag(CHECKPOINTS[index], game.checkpoint_index >= index, str(index + 1))
 	goal(Vector2(GOAL, FLOOR))
 	if not game.secret_collected:
-		var sy := sin(visual_time * 3) * 3
-		var pts := PackedVector2Array([Vector2(0, -12), Vector2(4, -4), Vector2(12, 0), Vector2(4, 4), Vector2(0, 12), Vector2(-4, 4), Vector2(-12, 0), Vector2(-4, -4)])
-		for i in pts.size():
-			pts[i] += SECRET + Vector2(0, sy)
-		draw_colored_polygon(pts, Color("fff2b4"))
-		draw_rect(Rect2(SECRET + Vector2(-2, -2 + sy), Vector2(4, 4)), Color("e5a764"))
+		var rise := snappedf(sin(visual_time * 3) * 4, Art.DOT)
+		var at := SECRET + Vector2(0, rise)
+		Art.block(self, at + Vector2(-2, -10), Vector2(4, 20), Art.BRASS)
+		Art.block(self, at + Vector2(-10, -2), Vector2(20, 4), Art.BRASS)
+		Art.block(self, at - Vector2(4, 4), Vector2(8, 8), Art.CREAM)
 
 func on_ground(x: float) -> bool:
 	for rect in grounds:
@@ -111,42 +129,59 @@ func on_ground(x: float) -> bool:
 				return true
 	return false
 
-func cloud(at: Vector2, color: Color) -> void:
-	draw_rect(Rect2(at + Vector2(18, 0), Vector2(38, 12)), color)
-	draw_rect(Rect2(at + Vector2(8, 10), Vector2(66, 12)), color)
-	draw_rect(Rect2(at, Vector2(86, 8)).grow_individual(0, -19, 0, 19), color)
+func cloud(at: Vector2) -> void:
+	Art.block(self, at + Vector2(16, 0), Vector2(30, 4), Art.CLOUD)
+	Art.block(self, at + Vector2(10, 4), Vector2(44, 4), Art.CLOUD)
+	Art.block(self, at + Vector2(0, 8), Vector2(66, 4), Art.CLOUD)
+	for x in range(0, 74, 4):
+		Art.block(self, at + Vector2(x, 12 + 2 * posmod(x / 4, 2)), Vector2(2, 2), Art.CLOUD)
+
+func ridge(at: Vector2, width: int, tone: Color) -> void:
+	var steps := [Vector2(0, 54), Vector2(24, 44), Vector2(46, 30), Vector2(74, 16), Vector2(104, 0),
+		Vector2(146, 10), Vector2(184, 24), Vector2(214, 38), Vector2(238, 50), Vector2(width, 50)]
+	for i in range(steps.size() - 1):
+		var start: Vector2 = at + steps[i]
+		Art.block(self, start, Vector2(steps[i + 1].x - steps[i].x, 440 - start.y), tone)
 
 func terrain(rect: Rect2, floating: bool = false) -> void:
-	Elements.terrain(self,rect,floating)
+	Elements.terrain(self, rect, floating)
+
+func title_masonry(center_x: float) -> void:
+	var left := center_x - 284
+	var platform := Rect2(left, 310, 568, 24)
+	Elements.terrain(self, platform, true)
+	for x in [left + 14, left + 188, left + 356, left + 530]:
+		var column := Rect2(x, 334, 22, FLOOR - 334)
+		draw_rect(column, Art.CLAY)
+		draw_rect(Rect2(x, 334, 6, FLOOR - 334), Art.LOAM)
+		for y in range(344, int(FLOOR), 14):
+			Art.block(self, Vector2(x, y), Vector2(22, 2), Art.SOIL)
 
 func bush(at: Vector2) -> void:
-	draw_rect(Rect2(at + Vector2(-22, -17), Vector2(44, 17)), Color("478b6c"))
-	draw_rect(Rect2(at + Vector2(-14, -25), Vector2(27, 25)), Color("599e70"))
-	draw_rect(Rect2(at + Vector2(-18, -17), Vector2(8, 4)), Color("9abe78"))
-	draw_rect(Rect2(at + Vector2(4, -22), Vector2(6, 3)), Color("9abe78"))
+	Art.block(self, at + Vector2(-22, -6), Vector2(44, 6), Art.LOAM)
+	Art.block(self, at + Vector2(-12, -12), Vector2(20, 6), Art.CLAY)
+	Art.block(self, at + Vector2(-10, -12), Vector2(16, 2), Art.GRASS)
 
 func grass(at: Vector2, seed_value: int) -> void:
-	draw_line(at + Vector2(-4, -7), at, Color("387a60"), 2)
-	draw_line(at + Vector2(4, -10), at, Color("387a60"), 2)
+	Art.steps(self, at + Vector2(-4, -6), at - Vector2(0, 2), Art.CLAY)
+	Art.steps(self, at + Vector2(4, -8), at - Vector2(0, 2), Art.CLAY)
 	if seed_value % 3 == 0:
-		draw_rect(Rect2(at + Vector2(1, -14), Vector2(6, 6)), Color("f3d498") if seed_value % 2 else Color("f1a58c"))
-		draw_rect(Rect2(at + Vector2(3, -12), Vector2(2, 2)), Color("f9edc9"))
+		Art.block(self, at + Vector2(2, -14), Vector2(4, 6), Art.BRASS)
+		Art.block(self, at + Vector2(4, -12), Vector2(2, 2), Art.CREAM)
 
 func flag(at: Vector2, active: bool, number: String) -> void:
-	draw_rect(Rect2(at + Vector2(-7, -3), Vector2(18, 3)), Color("44635b"))
-	draw_rect(Rect2(at + Vector2(0, -71), Vector2(4, 69)), Color("edf0cc"))
-	var wave := 2 if sin(visual_time * 5) > 0 else 0
-	draw_rect(Rect2(at + Vector2(4, -68), Vector2(31 + wave, 22)), Color("f8da8a") if active else Color("639b91"))
-	draw_string(font, at + Vector2(15, -52), number, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("3c655a"))
+	Art.block(self, at + Vector2(-6, -4), Vector2(16, 4), Art.INK)
+	Art.block(self, at + Vector2(0, -72), Vector2(4, 70), Art.INK)
+	Art.block(self, at + Vector2(0, -72), Vector2(2, 68), Art.STEEL_LIGHT)
+	var flag_color := Art.BRASS if active else Art.STEEL_LIGHT
+	for strip in 8:
+		var flutter := snappedf(sin(visual_time * 8 - strip * 0.5) * strip * 0.45, Art.DOT)
+		Art.block(self, at + Vector2(4 + strip * 4, -68 + flutter), Vector2(4, 20), flag_color)
+	draw_string(font, at + Vector2(12, -53), number, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Art.INK)
 	if active:
-		draw_rect(Rect2(at + Vector2(-3, -77), Vector2(10, 6)), Color("f8da8a"))
+		Art.block(self, at + Vector2(-2, -78), Vector2(8, 4), Art.BRASS)
 
 func goal(at: Vector2) -> void:
-	draw_rect(Rect2(at + Vector2(-31, -80), Vector2(62, 80)), Color("324d49"))
-	draw_rect(Rect2(at + Vector2(-25, -74), Vector2(50, 74)), Color("81c39a"))
-	draw_rect(Rect2(at + Vector2(-18, -65), Vector2(36, 65)), Color("264b49"))
-	draw_rect(Rect2(at + Vector2(-15, -62), Vector2(30, 62)), Color("f6dda0"))
-	draw_rect(Rect2(at + Vector2(-15, -62), Vector2(7, 62)), Color("d3b980"))
-	draw_rect(Rect2(at + Vector2(7, -32), Vector2(4, 4)), Color("8f8056"))
-	draw_rect(Rect2(at + Vector2(-38, -99), Vector2(76, 20)), Color("2f5750"))
-	draw_string(font, at + Vector2(-27, -85), "FINISH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("f6dda0"))
+	Elements.door(self, Rect2(at + Vector2(-32, -80), Vector2(64, 80)))
+	Art.block(self, at + Vector2(-38, -100), Vector2(76, 20), Art.INK)
+	draw_string(font, at + Vector2(-27, -85), "FINISH", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Art.CREAM)

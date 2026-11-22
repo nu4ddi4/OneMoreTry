@@ -1,6 +1,7 @@
 class_name TryDevice
 extends Node2D
 
+const Art = preload("res://scripts/pixel_art.gd")
 const Elements = preload("res://scripts/elements.gd")
 
 var kind := "double"
@@ -84,10 +85,15 @@ func _draw() -> void:
 		"bait", "key": Elements.charge(self,true)
 		"pad":
 			Elements.surface(self,Rect2(-22,-10,44,10),Elements.Kind.PLATFORM)
-			draw_polyline(PackedVector2Array([Vector2(-10,-3),Vector2(-4,-7),Vector2(2,-3),Vector2(8,-7)]),Elements.BRASS,2)
+			var lift := 2.0 if cooldown > 0.12 else 0.0
+			for x in [-10, 0, 10]:
+				Art.block(self, Vector2(x, -6 - lift), Vector2(6, 2), Art.BRASS)
 		"chain":
 			var end := tip() - global_position
 			for i in range(0, int(length), 12):
-				var at := end * (float(i) / length)
-				draw_arc(at, 5, 0, TAU, 8, Elements.STEEL_LIGHT, 2)
-			draw_rect(Rect2(-8,-8,16,10), Elements.STEEL_DARK)
+				var at := Art.snap(end * (float(i) / length))
+				var size := Vector2(8, 14) if posmod(i, 24) == 0 else Vector2(4, 10)
+				draw_rect(Rect2(at - size / 2, size), Art.INK)
+				draw_rect(Rect2(at - size / 2, size), Art.STEEL_LIGHT, false, 2)
+			draw_rect(Rect2(-8, -8, 16, 10), Art.INK)
+			Art.block(self, Vector2(-4, -6), Vector2(8, 4), Art.BRASS)
