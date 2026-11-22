@@ -1,0 +1,1 @@
+deb [arch=amd64 signed-by=/etc/apt/keyrings/onemoretry.asc] https://nu4ddi4.github.io/OneMoreTry/apt stable main

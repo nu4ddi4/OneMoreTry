@@ -5,12 +5,12 @@ Debian·Ubuntu의 amd64 패키지입니다. 데스크톱 메뉴의 **한 번만 
 ## 내려받은 파일로 설치
 
 ```sh
-sudo apt install ./onemoretry_0.8.0-1_amd64.deb
+sudo apt install ./onemoretry_0.8.1-2_amd64.deb
 ```
 
-실제 받은 파일명을 사용합니다. PR에서 내려받은 빌드는 Debian 버전명에 `~preview`가 들어가므로 같은 버전의 정식 패키지로 자동 업그레이드할 수 있습니다.
+실제 받은 파일명을 사용합니다. 0.8.1부터 패키지 설치 시 APT 소스와 공개키도 등록됩니다. PR에서 내려받은 빌드는 Debian 버전명에 `~preview`가 들어가므로 같은 버전의 정식 패키지로 자동 업그레이드할 수 있습니다.
 
-## APT 저장소 등록
+## APT 저장소 수동 등록
 
 Pages의 첫 배포가 끝나면 저장소 주소는 `https://nu4ddi4.github.io/OneMoreTry/apt`입니다. 키를 등록하기 전에 아래 명령이 출력한 지문을 프로젝트가 별도 공지한 지문과 비교합니다.
 
@@ -61,7 +61,7 @@ python3 tools/fetch_templates.py --platform linux
 mkdir -p build/linux
 godot --headless --editor --import --quit
 godot --headless --export-release 'Linux x86_64' build/linux/onemoretry
-python3 tools/build_deb.py --binary build/linux/onemoretry --version 0.8.0-1
+python3 tools/build_deb.py --binary build/linux/onemoretry --version 0.8.1-2
 ```
 
 게임 버전을 유지하면서 Linux 패키지 변경을 배포할 때는 `installer/linux/debian-revision`을 올립니다.

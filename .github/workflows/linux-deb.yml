@@ -72,6 +72,8 @@ jobs:
           printf 'deb [arch=amd64 signed-by=/etc/apt/keyrings/onemoretry-ci.asc] file:%s stable main\n' "$repo" | sudo tee "$source_file"
           sudo apt-get update -o "Dir::Etc::sourcelist=$source_file" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
           sudo apt-get install -y "onemoretry=$DEB_VERSION"
+          cmp installer/linux/onemoretry.list /etc/apt/sources.list.d/onemoretry.list
+          cmp installer/linux/onemoretry.asc /etc/apt/keyrings/onemoretry.asc
           test "$(dpkg-query -W -f='${Version}' onemoretry)" = "$DEB_VERSION"
           XDG_DATA_HOME="$(mktemp -d)" timeout 30s onemoretry --headless --quit-after 10 -- --test
       - uses: actions/upload-artifact@v4
@@ -139,6 +141,7 @@ jobs:
           unset APT_SIGNING_SUBKEY
           python3 tools/build_apt_repository.py --deb "packages/onemoretry_${DEB_VERSION}_amd64.deb" --output site/apt --fingerprint "$APT_SIGNING_FINGERPRINT"
           printf '%s\n' "$DEB_VERSION" > site/apt/version.txt
+          cp installer/Install-OneMoreTry.ps1 site/apt/
       - uses: actions/upload-pages-artifact@v3
         if: steps.version.outputs.publish == 'true'
         with:

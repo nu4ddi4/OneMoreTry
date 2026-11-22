@@ -276,6 +276,7 @@ jobs:
         working-directory: package
         run: |
           zip -r -9 "../release/OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" .
+          cp ../installer/Install-OneMoreTry.ps1 ../release/
           cd ../release
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" > "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip.sha256"
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" > "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe.sha256"
