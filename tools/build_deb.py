@@ -46,8 +46,6 @@ def main() -> None:
         launcher.symlink_to(f"../lib/{PACKAGE}/{PACKAGE}")
         install(ROOT / f"installer/linux/{PACKAGE}.desktop", tree / f"usr/share/applications/{PACKAGE}.desktop")
         install(ROOT / "assets/icon.svg", tree / f"usr/share/icons/hicolor/scalable/apps/{PACKAGE}.svg")
-        install(ROOT / "installer/linux/onemoretry.asc", tree / "etc/apt/keyrings/onemoretry.asc")
-        install(ROOT / "installer/linux/onemoretry.list", tree / "etc/apt/sources.list.d/onemoretry.list")
         metadata = "io.github.nu4ddi4.OneMoreTry.metainfo.xml"
         install(ROOT / "installer/linux" / metadata, tree / "usr/share/metainfo" / metadata)
         doc = tree / f"usr/share/doc/{PACKAGE}"

@@ -53,6 +53,7 @@ jobs:
           chmod +x /tmp/godot/Godot_v4.6.3-stable_linux.x86_64
           sudo ln -s /tmp/godot/Godot_v4.6.3-stable_linux.x86_64 /usr/local/bin/godot
           python3 tools/fetch_templates.py
+          python3 tools/fetch_templates.py --platform linux
       - name: Validate release configuration and stamp runtime channel
         env:
           RELEASE_BRANCH: ${{ github.base_ref || github.ref_name }}
@@ -104,6 +105,22 @@ jobs:
           cp assets/fonts/LICENSE.txt build/windows/licenses/NotoSansCJK.txt
           cp docs/GODOT_LICENSE.txt build/windows/licenses/Godot.txt
           cp docs/GODOT_COPYRIGHT.txt build/windows/licenses/Godot-third-party.txt
+      - name: Export Linux amd64 DEB
+        run: |
+          mkdir -p build/linux
+          version="$(jq -er '.version' build/release-info.json)"
+          version="${version/-beta/~beta}"
+          revision="$(cat installer/linux/debian-revision)"
+          godot --headless --export-release 'Linux x86_64' build/linux/onemoretry
+          python3 tools/build_deb.py --binary build/linux/onemoretry --version "$version-$revision"
+          deb="build/deb/onemoretry_${version}-${revision}_amd64.deb"
+          dpkg-deb --fsys-tarfile "$deb" | tar -tf - > build/deb-contents.txt
+          grep -Fx './usr/share/metainfo/io.github.nu4ddi4.OneMoreTry.metainfo.xml' build/deb-contents.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OneMoreTry-Linux-amd64
+          path: build/deb/*.deb
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: OneMoreTry-Windows-x64
@@ -195,7 +212,7 @@ jobs:
             updater-*.log
 
   publish:
-    name: Publish Windows release
+    name: Publish game release
     if: always() && needs.branch-policy.result == 'success' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && ((needs.build.result == 'success' && needs.windows-smoke.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.verified_run_id != ''))
     needs: [branch-policy, build, windows-smoke]
     runs-on: ubuntu-latest
@@ -229,7 +246,7 @@ jobs:
             verified_sha=$(jq -r .head_sha /tmp/verified-run.json)
             jq -e '.name == "Godot Windows" and .path == ".github/workflows/game-ci.yml" and .status == "completed" and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")' /tmp/verified-run.json
             git fetch origin "$verified_sha" --depth=1
-            git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer tools/windows-updater tools/build_windows_updater.ps1 docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
+            git diff --exit-code "$verified_sha" HEAD -- project.godot export_presets.cfg scripts scenes assets installer tools/windows-updater tools/build_windows_updater.ps1 tools/build_deb.py docs/PLAY_WINDOWS.txt docs/GODOT_LICENSE.txt docs/GODOT_COPYRIGHT.txt
             gh api "repos/$GH_REPO/compare/$verified_sha...$GITHUB_SHA" --jq .status | grep -Ex 'ahead|identical'
             gh api "repos/$GH_REPO/actions/runs/$VERIFIED_RUN_ID/jobs?per_page=100" > /tmp/verified-jobs.json
             jq -e '[.jobs[] | select((.name == "Test & export Windows" or .name == "Windows launch") and .conclusion == "success")] | length == 2' /tmp/verified-jobs.json
@@ -271,15 +288,23 @@ jobs:
           path: release
           run-id: ${{ env.ARTIFACT_RUN_ID }}
           github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        if: steps.release.outputs.publish == 'true'
+        with:
+          name: OneMoreTry-Linux-amd64
+          path: release
+          run-id: ${{ env.ARTIFACT_RUN_ID }}
+          github-token: ${{ github.token }}
       - name: Package the Windows-tested executable
         if: steps.release.outputs.publish == 'true'
         working-directory: package
         run: |
           zip -r -9 "../release/OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" .
-          cp ../installer/Install-OneMoreTry.ps1 ../release/
+          cp ../installer/Install-OneMoreTry.ps1 ../installer/linux/remove-apt-registration.sh ../release/
           cd ../release
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" > "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip.sha256"
           sha256sum "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" > "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe.sha256"
+          for deb in onemoretry_*_amd64.deb; do sha256sum "$deb" > "$deb.sha256"; done
       - name: Upload and publish the selected channel
         if: steps.release.outputs.publish == 'true'
         run: |
@@ -294,6 +319,10 @@ jobs:
           gh api "$release_api" > /tmp/uploaded-release.json
           jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64-Setup.exe" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
           jq -e --arg name "OneMoreTry-${RELEASE_TAG}-Windows-x64.zip" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
+          linux_version="${RELEASE_TAG#v}"
+          linux_version="${linux_version/-beta/~beta}"
+          linux_deb="onemoretry_${linux_version}-$(cat installer/linux/debian-revision)_amd64.deb"
+          jq -e --arg name "$linux_deb" '.assets[] | select(.name == $name and (.digest | test("^sha256:[0-9a-f]{64}$")))' /tmp/uploaded-release.json
           if [[ "$PRERELEASE" == true ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --prerelease=true --latest=false
           else

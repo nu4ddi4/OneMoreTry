@@ -1,7 +1,7 @@
 # 0.8.1
 
 - 황동 관측소 그래픽과 캐릭터 모션을 적용합니다.
-- DEB 설치 시 APT 업데이트 소스가 함께 등록됩니다.
+- AppStream 정보가 포함된 Linux DEB를 Windows EXE와 함께 GitHub Releases에서 제공합니다.
 - 공통 설치 스크립트에서 기존 EXE와 DEB를 설치할 수 있습니다.
 
 # 0.8.0

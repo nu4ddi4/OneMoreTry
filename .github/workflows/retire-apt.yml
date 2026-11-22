@@ -1,0 +1,50 @@
+name: Retire OneMoreTry APT
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/retire-apt.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onemoretry-pages
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Prepare download notice
+        run: |
+          mkdir -p site/apt
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="ko">
+          <meta charset="utf-8">
+          <title>한 번만 더!</title>
+          <h1>한 번만 더!</h1>
+          <p>APT 저장소 배포는 종료됐습니다.</p>
+          <p><a href="https://github.com/nu4ddi4/OneMoreTry/releases/latest">설치 파일 다운로드</a></p>
+          <p><a href="https://github.com/nu4ddi4/OneMoreTry/blob/main/docs/LINUX_APT.md">이전 APT 등록 삭제</a></p>
+          </html>
+          HTML
+          cp site/index.html site/apt/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
