@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+PackageIdentifier: Nu4ddi4.OneMoreTry
+PackageVersion: 0.8.0
+PackageLocale: en-US
+Publisher: One More Try!
+PackageName: One More Try!
+License: Not specified
+ShortDescription: A side-scrolling precision platformer with forty trap encounters
+ManifestType: locale
+ManifestVersion: 1.10.0

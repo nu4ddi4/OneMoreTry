@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: Nu4ddi4.OneMoreTry
+PackageVersion: 0.8.0
+PackageLocale: ko-KR
+Publisher: One More Try!
+PublisherUrl: https://github.com/nu4ddi4/OneMoreTry
+PackageName: One More Try!
+PackageUrl: https://github.com/nu4ddi4/OneMoreTry
+License: Not specified
+ShortDescription: 함정을 피해 진행하는 2D 횡스크롤 플랫포머 게임
+Moniker: onemoretry
+ReleaseNotesUrl: https://github.com/nu4ddi4/OneMoreTry/releases/tag/v0.8.0
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
