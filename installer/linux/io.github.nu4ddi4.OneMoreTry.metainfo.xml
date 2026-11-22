@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.nu4ddi4.OneMoreTry</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>One More Try!</name>
+  <name xml:lang="ko">한 번만 더!</name>
+  <summary>A precision platformer with forty trap encounters</summary>
+  <summary xml:lang="ko">40개 구간의 함정을 피하는 횡스크롤 플랫폼 게임</summary>
+  <description>
+    <p>Run and jump through forty trap encounters, learn their timing, and retry from checkpoints.</p>
+    <p xml:lang="ko">달리고 점프하며 40개 구간의 함정을 피하세요. 실패해도 체크포인트에서 다시 도전할 수 있습니다.</p>
+  </description>
+  <launchable type="desktop-id">onemoretry.desktop</launchable>
+  <developer id="io.github.nu4ddi4">
+    <name>One More Try!</name>
+    <name xml:lang="ko">한 번만 더!</name>
+  </developer>
+  <url type="homepage">https://github.com/nu4ddi4/OneMoreTry</url>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">mild</content_attribute>
+  </content_rating>
+</component>

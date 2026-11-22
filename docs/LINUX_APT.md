@@ -10,6 +10,10 @@ sudo apt install ./onemoretry_0.8.1-2_amd64.deb
 
 실제 받은 파일명을 사용합니다. 0.8.1부터 패키지 설치 시 APT 소스와 공개키도 등록됩니다. PR에서 내려받은 빌드는 Debian 버전명에 `~preview`가 들어가므로 같은 버전의 정식 패키지로 자동 업그레이드할 수 있습니다.
 
+### GNOME 소프트웨어 앱 정보
+
+로컬 DEB에는 실행용 데스크톱 항목과 아이콘, 한국어 이름과 요약을 포함한 AppStream 메타데이터가 들어 있습니다. 다른 앱에도 같은 구성을 적용하려면 데스크톱 항목을 `/usr/share/applications`에, 아이콘을 `/usr/share/icons/hicolor`에, `.metainfo.xml`을 `/usr/share/metainfo`에 설치하세요. AppStream의 `launchable`은 실제 데스크톱 항목 파일명을 가리켜야 합니다.
+
 ## APT 저장소 수동 등록
 
 Pages의 첫 배포가 끝나면 저장소 주소는 `https://nu4ddi4.github.io/OneMoreTry/apt`입니다. 키를 등록하기 전에 아래 명령이 출력한 지문을 프로젝트가 별도 공지한 지문과 비교합니다.

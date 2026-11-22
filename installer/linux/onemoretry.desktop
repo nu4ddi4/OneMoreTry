@@ -2,6 +2,8 @@
 Type=Application
 Name=One More Try!
 Name[ko]=한 번만 더!
+Comment=A precision platformer with forty trap encounters
+Comment[ko]=40개 구간의 함정을 피하는 횡스크롤 플랫폼 게임
 Exec=onemoretry
 Icon=onemoretry
 Terminal=false
