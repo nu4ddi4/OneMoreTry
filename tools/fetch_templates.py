@@ -1,4 +1,5 @@
-"""Fetch only the Windows release template from the official Godot ZIP via ranges."""
+"""Fetch platform-specific templates from the official Godot ZIP via ranges."""
+import argparse
 import io
 import os
 import struct
@@ -12,6 +13,13 @@ URL = f"https://github.com/godotengine/godot-builds/releases/download/{VERSION}-
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--platform", choices=("windows", "linux"), default="windows")
+    args = parser.parse_args()
+    filenames = {
+        "windows": {"templates/windows_release_x86_64.exe", "templates/windows_debug_x86_64.exe"},
+        "linux": {"templates/linux_release.x86_64", "templates/linux_debug.x86_64"},
+    }[args.platform]
     with urllib.request.urlopen(urllib.request.Request(URL, method="HEAD")) as response:
         url = response.url
         length = int(response.headers["Content-Length"])
@@ -34,7 +42,7 @@ def main():
     target = data_home / "export_templates" / f"{VERSION}.stable"
     target.mkdir(parents=True, exist_ok=True)
     for item in archive.infolist():
-        if item.filename not in ("templates/windows_release_x86_64.exe", "templates/windows_debug_x86_64.exe"):
+        if item.filename not in filenames:
             continue
         # zipfile adjusts offsets for the artificial archive; restore the absolute offset.
         absolute = item.header_offset + start
@@ -47,7 +55,11 @@ def main():
             raise RuntimeError("Template size/CRC check failed")
         output = target / Path(item.filename).name
         output.write_bytes(raw)
+        filenames.remove(item.filename)
         print(f"Installed {output.name} ({len(raw):,} bytes, CRC verified)", flush=True)
+
+    if filenames:
+        raise RuntimeError(f"Missing export templates: {sorted(filenames)}")
 
 
 if __name__ == "__main__":
