@@ -9,10 +9,11 @@ const RecordsScript = preload("res://scripts/records.gd")
 const SoundScript = preload("res://scripts/sound.gd")
 const UpdaterScript = preload("res://scripts/updater.gd")
 const InspectorScript = preload("res://scripts/inspection.gd")
-const INK := Color("203c40")
-const CREAM := Color("f4ecd4")
-const MINT := Color("84dfb7")
-const MUTED := Color("a2bcb3")
+const Art = preload("res://scripts/pixel_art.gd")
+const INK := Art.INK
+const CREAM := Art.CREAM
+const MINT := Art.MINT
+const MUTED := Art.STEEL_LIGHT
 const DESIGN_SIZE := Vector2(960, 540)
 
 enum Mode { MENU, PLAYING, PAUSED, CLEAR, RECORDS }
@@ -105,10 +106,7 @@ func build_updater() -> void:
 	update_dialog.title = "업데이트"
 	update_dialog.dialog_hide_on_ok = false
 	update_dialog.min_size = Vector2i(560, 260)
-	var dialog_theme := Theme.new()
-	dialog_theme.default_font = font
-	dialog_theme.default_font_size = 17
-	update_dialog.theme = dialog_theme
+	update_dialog.theme = dialog_theme()
 	add_child(update_dialog)
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 20)
@@ -224,6 +222,9 @@ func build_traps() -> void:
 		encounter.game = self
 		add_child(encounter)
 		traps.append(encounter)
+
+func world_animation_enabled() -> bool:
+	return mode not in [Mode.PAUSED, Mode.RECORDS]
 
 func interaction_enabled() -> bool:
 	return mode == Mode.PLAYING and player != null and player.alive and not bool(get_meta("inspection_pause_world", false))
@@ -423,15 +424,28 @@ func _draw() -> void:
 		color.a = minf(1, p.life * 3)
 		draw_rect(Rect2(p.position, Vector2.ONE * p.size), color)
 
-func style(background: Color, border: Color = Color.TRANSPARENT, width: int = 0) -> StyleBoxFlat:
-	var result := StyleBoxFlat.new()
-	result.bg_color = background
-	result.border_color = border
-	result.set_border_width_all(width)
-	result.set_corner_radius_all(3)
-	result.content_margin_left = 12
-	result.content_margin_right = 12
-	return result
+func dialog_theme() -> Theme:
+	var theme := Theme.new()
+	theme.default_font = font
+	theme.default_font_size = 17
+	theme.set_stylebox("panel", "AcceptDialog", Art.box(INK, Art.STEEL))
+	theme.set_stylebox("embedded_border", "Window", Art.box(INK, Art.STEEL))
+	theme.set_stylebox("embedded_unfocused_border", "Window", Art.box(INK, Art.STEEL))
+	theme.set_color("title_color", "Window", CREAM)
+	theme.set_color("font_color", "Label", CREAM)
+	for type in ["Button", "OptionButton", "CheckButton", "PopupMenu"]:
+		theme.set_color("font_color", type, CREAM)
+		theme.set_color("font_hover_color", type, CREAM)
+		theme.set_color("font_pressed_color", type, CREAM)
+		theme.set_color("font_focus_color", type, CREAM)
+		theme.set_color("font_disabled_color", type, MUTED)
+		theme.set_stylebox("normal", type, Art.box(Art.SHADE, Art.STEEL))
+		theme.set_stylebox("hover", type, Art.box(Art.STEEL, Art.STEEL_LIGHT))
+		theme.set_stylebox("pressed", type, Art.box(INK, Art.MINT_SHADOW))
+		theme.set_stylebox("disabled", type, Art.box(INK, Art.SHADE))
+		theme.set_stylebox("focus", type, Art.box(Color.TRANSPARENT, Art.BRASS))
+	theme.set_stylebox("panel", "PopupMenu", Art.box(INK, Art.STEEL))
+	return theme
 
 func text(parent: Node, value: String, at: Vector2, dimensions: Vector2, font_size: int = 16, color: Color = CREAM) -> Label:
 	var label := Label.new()
@@ -445,11 +459,11 @@ func text(parent: Node, value: String, at: Vector2, dimensions: Vector2, font_si
 	parent.add_child(label)
 	return label
 
-func panel(parent: Node, at: Vector2, dimensions: Vector2, color: Color = Color("203c40f5")) -> Panel:
+func panel(parent: Node, at: Vector2, dimensions: Vector2, color: Color = INK) -> Panel:
 	var node := Panel.new()
 	node.position = at
 	node.size = dimensions
-	node.add_theme_stylebox_override("panel", style(color, Color("6e948552"), 1))
+	node.add_theme_stylebox_override("panel", Art.box(color, Art.STEEL))
 	parent.add_child(node)
 	return node
 
@@ -464,10 +478,10 @@ func button(parent: Node, value: String, at: Vector2, dimensions: Vector2, callb
 	node.add_theme_color_override("font_hover_color", INK)
 	node.add_theme_color_override("font_pressed_color", INK)
 	node.add_theme_color_override("font_focus_color", INK if primary else CREAM)
-	node.add_theme_stylebox_override("normal", style(MINT if primary else Color("335253"), Color("52736b"), 1))
-	node.add_theme_stylebox_override("hover", style(Color("b5e6c0")))
-	node.add_theme_stylebox_override("pressed", style(Color("67b99d")))
-	node.add_theme_stylebox_override("focus", style(Color.TRANSPARENT, Color("f6d794"), 2))
+	node.add_theme_stylebox_override("normal", Art.box(MINT if primary else Art.SHADE, Art.MINT_SHADOW if primary else Art.STEEL))
+	node.add_theme_stylebox_override("hover", Art.box(CREAM, Art.BRASS))
+	node.add_theme_stylebox_override("pressed", Art.box(MINT, Art.MINT_SHADOW))
+	node.add_theme_stylebox_override("focus", Art.box(Color.TRANSPARENT, Art.BRASS))
 	node.pressed.connect(func():
 		sound.effect("click")
 		callback.call())
@@ -486,7 +500,7 @@ func build_ui() -> void:
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(hud)
 	hud.size = DESIGN_SIZE
-	var hud_panel := panel(hud, Vector2(20, 18), Vector2(920, 62), Color("203c40f2"))
+	var hud_panel := panel(hud, Vector2(20, 18), Vector2(920, 62), INK)
 	hud_panel.set_anchor(SIDE_RIGHT, 1.0)
 	hud_panel.offset_right = -20
 	death_label = text(hud, "", Vector2(38, 30), Vector2(210, 35), 19)
@@ -501,7 +515,7 @@ func build_ui() -> void:
 	var track := ColorRect.new()
 	track.position = Vector2(21, 78)
 	track.size = Vector2(918, 3)
-	track.color = Color("395850")
+	track.color = Art.SHADE
 	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(track)
 	track.set_anchor(SIDE_RIGHT, 1.0)
@@ -514,7 +528,7 @@ func build_ui() -> void:
 	toast_label = text(ui, "", Vector2(140, 105), Vector2(680, 38), 15, INK)
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	toast_label.add_theme_stylebox_override("normal", style(Color("fff1d2ef"), Color("dfcda4"), 1))
+	toast_label.add_theme_stylebox_override("normal", Art.box(CREAM, Art.BRASS))
 	toast_label.hide()
 	overlay = Control.new()
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -551,13 +565,16 @@ func show_menu() -> void:
 	var card := panel(overlay, Vector2(220, 128), Vector2(520, 280))
 	var title := text(card, "한 번만 더!", Vector2(24, 25), Vector2(472, 80), 52)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_shadow_color", Art.MINT_SHADOW)
+	title.add_theme_constant_override("shadow_offset_x", 4)
+	title.add_theme_constant_override("shadow_offset_y", 4)
 	var start := button(card, "시작", Vector2(40, 141), Vector2(440, 48), start_run, true)
 	button(card, "기록", Vector2(40, 203), Vector2(214, 40), show_records)
 	button(card, "종료", Vector2(266, 203), Vector2(214, 40), quit_game)
 	if OS.get_name() == "Windows":
 		update_button = button(overlay, "업데이트", Vector2(735, 472), Vector2(160, 36), show_updates)
 		refresh_update_ui()
-	version_label = text(overlay, "v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(180, 18), 10, Color("b5c4a2"))
+	version_label = text(overlay, "v" + str(ProjectSettings.get_setting("application/config/version")), Vector2(65, 508), Vector2(180, 18), 10, MUTED)
 	layout_screen()
 	start.grab_focus()
 	if not records.last_error.is_empty():
@@ -608,7 +625,7 @@ func show_clear() -> void:
 		badge += "  ·  무사망"
 	if secret_collected:
 		badge += "  ·  별"
-	text(card, badge, Vector2(31, 190), Vector2(438, 25), 13, Color("f5ce95"))
+	text(card, badge, Vector2(31, 190), Vector2(438, 25), 13, Art.BRASS)
 	var again := button(card, "다시하기", Vector2(30, 236), Vector2(241, 40), start_run, true)
 	button(card, "메뉴", Vector2(283, 236), Vector2(177, 40), show_menu)
 	again.grab_focus()
