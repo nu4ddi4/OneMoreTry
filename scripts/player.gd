@@ -34,6 +34,7 @@ var last_vertical_speed := 0.0
 var false_impact := 0.0
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	collision_layer = Elements.PLAYER_LAYER
 	collision_mask = Elements.SOLID_LAYER
 	platform_floor_layers = 0

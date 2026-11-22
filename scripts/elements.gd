@@ -18,7 +18,7 @@ const STEEL_DARK := Art.INK
 const STEEL := Art.STEEL
 const STEEL_LIGHT := Art.STEEL_LIGHT
 const BRASS := Art.BRASS
-const CHARGE := Art.MINT
+const CHARGE := Art.BRASS
 
 static func family(kind: int) -> StringName:
 	match kind:
@@ -41,23 +41,27 @@ static func touches(kind: int, rect: Rect2, body: Rect2) -> bool:
 
 static func terrain(canvas: Node2D, rect: Rect2, floating: bool = false, origin: Vector2 = Vector2.ZERO) -> void:
 	canvas.draw_rect(rect, Art.SOIL)
-	strip(canvas, rect, 0, 10, Art.GRASS)
 	strip(canvas, rect, 0, 4, Art.GRASS_LIGHT)
-	strip(canvas, rect, 10, 6, Art.CLAY)
+	strip(canvas, rect, 4, 8, Art.GRASS)
+	strip(canvas, rect, 12, 4, Art.CLAY)
 	var world_rect := Rect2(rect.position + origin, rect.size)
-	# Use one world grid so disguised ground joins ordinary ground at either seam.
-	for n in range(floori(world_rect.position.x / 16), ceili(world_rect.end.x / 16)):
-		var x := n * 16.0 - origin.x
-		var root := Rect2(x, rect.position.y + 6, 6, 6 + 2 * posmod(n, 2)).intersection(rect)
-		if root.has_area():
-			canvas.draw_rect(root, Art.GRASS)
-	for row in range(1, ceili(rect.size.y / 20)):
-		var shift := posmod(row, 2) * 12
-		for col in range(floori((world_rect.position.x - shift) / 24), ceili((world_rect.end.x - shift) / 24)):
-			var x := col * 24.0 + shift - origin.x
-			var stone := Rect2(x, rect.position.y + row * 20, 8, 2).intersection(rect)
+	# Visible and disguised ground share the same masonry grid at both seams.
+	for column in range(floori(world_rect.position.x / 24), ceili(world_rect.end.x / 24)):
+		var edge := Rect2(column * 24.0 - origin.x, rect.position.y + 4, 2, 12).intersection(rect)
+		if edge.has_area():
+			canvas.draw_rect(edge, Art.CLAY)
+	for row in range(1, ceili(rect.size.y / 18)):
+		var stagger := posmod(row, 2) * 12
+		for column in range(floori((world_rect.position.x - stagger) / 24), ceili((world_rect.end.x - stagger) / 24)):
+			var at := Vector2(column * 24.0 + stagger - origin.x, rect.position.y + row * 18)
+			var variation := posmod(column * 17 + row * 11, 9)
+			var length := 12 + 2 * posmod(variation, 5)
+			var stone := Rect2(at, Vector2(length, 4 + 2 * posmod(variation, 2))).intersection(rect)
 			if stone.has_area():
 				canvas.draw_rect(stone, Art.LOAM)
+			var chip := Rect2(at + Vector2(2, 6), Vector2(length - 8, 2)).intersection(rect)
+			if variation > 3 and chip.has_area():
+				canvas.draw_rect(chip, Art.CLAY)
 	if floating:
 		strip(canvas, rect, maxf(0, rect.size.y - 2), 2, Art.INK)
 
@@ -133,8 +137,37 @@ static func hazard(canvas: Node2D, rect: Rect2, kind: int, amount: float = 1, ar
 			if inset.has_area() and mark.has_area():
 				canvas.draw_rect(mark, Art.BRASS if armed else Art.STEEL)
 
+static func cutter_socket(canvas: Node2D, x: float, width: float, floor_y: float) -> void:
+	var at := Vector2(x - 2, floor_y)
+	Art.block(canvas, at, Vector2(width + 4, 26), Art.INK)
+	Art.block(canvas, at + Vector2(2, 2), Vector2(4, 22), Art.CLAY)
+	Art.block(canvas, at + Vector2(width - 2, 2), Vector2(4, 22), Art.CLAY)
+	Art.block(canvas, at + Vector2(0, 24), Vector2(width + 4, 2), Art.BRASS)
+
+static func cutter(canvas: Node2D, rect: Rect2) -> void:
+	# Draw within the danger rectangle, including a shallow rim at the root of the teeth.
+	canvas.draw_rect(rect, Art.ORANGE)
+	var blade_face := rect.grow_individual(-8, -2, -4, -2)
+	if blade_face.has_area():
+		canvas.draw_rect(blade_face, Art.CLAY)
+	var spine := Rect2(rect.end.x - 4, rect.position.y, 4, rect.size.y)
+	canvas.draw_rect(spine, Art.INK)
+	for y in range(0, ceili(rect.size.y), 16):
+		for step in 8:
+			var point := ceili(absf(step - 2.5)) * 2
+			var shadow := Rect2(rect.position + Vector2(0, y + step * 2), Vector2(point, 2)).intersection(rect)
+			var edge := Rect2(rect.position + Vector2(point, y + step * 2), Vector2(3, 2)).intersection(rect)
+			if shadow.has_area():
+				canvas.draw_rect(shadow, Art.SOIL)
+			if edge.has_area():
+				canvas.draw_rect(edge, Art.CUTTING_EDGE)
+		var rivet := Rect2(rect.position + Vector2(rect.size.x - 8, y + 6), Vector2(2, 2)).intersection(rect)
+		if rivet.has_area():
+			canvas.draw_rect(rivet, Art.BRASS)
+	strip(canvas, rect, 0, 2, Art.CUTTING_EDGE)
+
 static func charge(canvas: Node2D, key: bool = false) -> void:
-	var tint := Art.BRASS if key else Art.MINT
+	var tint := Art.BRASS if key else Art.CREAM
 	for row in range(-6, 7):
 		var half_width := maxi(2, 10 - absi(row) * 2)
 		Art.block(canvas, Vector2(-half_width, row * 2), Vector2(half_width * 2, 2), Art.INK)

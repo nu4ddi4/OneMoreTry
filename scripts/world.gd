@@ -2,6 +2,7 @@ class_name TryWorld
 extends Node2D
 
 const Art = preload("res://scripts/pixel_art.gd")
+const OBSERVATORY = preload("res://assets/art/brass_observatory.png")
 const Elements = preload("res://scripts/elements.gd")
 const Course = preload("res://scripts/course.gd")
 const LENGTH := Course.LENGTH
@@ -31,6 +32,7 @@ func add_solid(rect: Rect2, climbable: bool = false) -> void:
 	add_child(body)
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	font = load("res://assets/fonts/OneMoreSans.otf")
 	for data in Course.all():
 		var cursor := 0.0
@@ -60,12 +62,14 @@ func _draw() -> void:
 	# Include the camera shake margin so a resized window never exposes clear color.
 	var route_tint := clampf(center.x / LENGTH, 0, 1)
 	draw_rect(Rect2(Vector2(left, top) - Vector2(8, 8), view_size + Vector2(16, 16)), Art.SKY.lerp(Art.HAZE, route_tint))
-	var sun := Art.snap(Vector2(left + view_size.x * 0.75, 144))
-	draw_rect(Rect2(sun - Vector2(24, 34), Vector2(48, 68)), Art.CLOUD)
-	draw_rect(Rect2(sun - Vector2(34, 24), Vector2(68, 48)), Art.CLOUD)
-	for i in range(-1, ceili(view_size.x / 240.0) + 2):
-		var x := left + i * 240.0 + fposmod(-left * 0.13 + visual_time * 2, 240.0) - 150
-		cloud(Art.snap(Vector2(x, 106 + posmod(i, 3) * 34)))
+	var sky_tone := Art.FAR.lerp(Art.NIGHT_FAR, route_tint)
+	var sun := Art.snap(Vector2(left + view_size.x * 0.22, 132))
+	for row in range(-24, 24, 2):
+		var half := snappedf(sqrt(576 - row * row), Art.DOT)
+		Art.block(self, sun + Vector2(-half, row), Vector2(half * 2, 2), Art.CLOUD)
+	for i in range(-1, ceili(view_size.x / 250.0) + 2):
+		var x := left + i * 250.0 + fposmod(-left * 0.12 + visual_time * 2, 250.0) - 140
+		cloud(Art.snap(Vector2(x, 106 + posmod(i, 3) * 36)))
 	for layer in 3:
 		var spacing := 264 + layer * 72
 		var tone: Color = [Art.FAR, Art.MID, Art.NEAR][layer]
@@ -74,6 +78,19 @@ func _draw() -> void:
 			var x := left + i * spacing + fposmod(-left * (0.16 + layer * 0.12), spacing) - spacing
 			var y := 246 + layer * 46 + posmod(i, 2) * 18
 			ridge(Art.snap(Vector2(x, y)), spacing, tone.lerp(late_tone, route_tint))
+	var landmark_size := Vector2(OBSERVATORY.get_size()) * 3
+	var landmark_spacing := view_size.x + 320
+	var offset := fposmod(left * 0.18, landmark_spacing)
+	var first_landmark := left + view_size.x - landmark_size.x * 0.90 - offset
+	for i in 2:
+		var landmark_at := Art.snap(Vector2(first_landmark + i * landmark_spacing, 398 - landmark_size.y))
+		if landmark_at.x < left + view_size.x and landmark_at.x + landmark_size.x > left:
+			draw_texture_rect(OBSERVATORY, Rect2(landmark_at, landmark_size), false)
+	var bottom := top + view_size.y + 8
+	if bottom > FLOOR:
+		Art.block(self, Vector2(left - 8, 440), Vector2(view_size.x + 16, maxf(0, bottom - 440)), sky_tone)
+	if game.title_visible():
+		title_masonry(center.x)
 	for rect in grounds:
 		if rect.end.x < left - 32 or rect.position.x > left + view_size.x + 32:
 			continue
@@ -84,8 +101,8 @@ func _draw() -> void:
 		if rect.end.x >= left - 32 and rect.position.x <= left + view_size.x + 32:
 			terrain(rect, true)
 			if rect in climbable_ledges: Elements.climb_wall(self,rect)
-	for i in range(maxi(0, int(left / 101) - 1), mini(int(LENGTH / 101), int((left + view_size.x) / 101) + 2)):
-		var x := i * 101 + 37
+	for i in range(maxi(0, int(left / 100) - 1), mini(int(LENGTH / 100), int((left + view_size.x) / 100) + 2)):
+		var x := i * 100 + 36
 		if on_ground(x):
 			grass(Vector2(x, FLOOR), i)
 	for n in range(Course.number_at(left) - 1, Course.number_at(left + view_size.x)):
@@ -113,9 +130,11 @@ func on_ground(x: float) -> bool:
 	return false
 
 func cloud(at: Vector2) -> void:
-	Art.block(self, at + Vector2(16, 0), Vector2(36, 8), Art.CLOUD)
-	Art.block(self, at + Vector2(6, 8), Vector2(62, 6), Art.CLOUD)
-	Art.block(self, at + Vector2(0, 14), Vector2(80, 4), Art.CLOUD)
+	Art.block(self, at + Vector2(16, 0), Vector2(30, 4), Art.CLOUD)
+	Art.block(self, at + Vector2(10, 4), Vector2(44, 4), Art.CLOUD)
+	Art.block(self, at + Vector2(0, 8), Vector2(66, 4), Art.CLOUD)
+	for x in range(0, 74, 4):
+		Art.block(self, at + Vector2(x, 12 + 2 * posmod(x / 4, 2)), Vector2(2, 2), Art.CLOUD)
 
 func ridge(at: Vector2, width: int, tone: Color) -> void:
 	var steps := [Vector2(0, 54), Vector2(24, 44), Vector2(46, 30), Vector2(74, 16), Vector2(104, 0),
@@ -127,18 +146,27 @@ func ridge(at: Vector2, width: int, tone: Color) -> void:
 func terrain(rect: Rect2, floating: bool = false) -> void:
 	Elements.terrain(self, rect, floating)
 
+func title_masonry(center_x: float) -> void:
+	var left := center_x - 284
+	var platform := Rect2(left, 310, 568, 24)
+	Elements.terrain(self, platform, true)
+	for x in [left + 14, left + 188, left + 356, left + 530]:
+		var column := Rect2(x, 334, 22, FLOOR - 334)
+		draw_rect(column, Art.CLAY)
+		draw_rect(Rect2(x, 334, 6, FLOOR - 334), Art.LOAM)
+		for y in range(344, int(FLOOR), 14):
+			Art.block(self, Vector2(x, y), Vector2(22, 2), Art.SOIL)
+
 func bush(at: Vector2) -> void:
-	Art.block(self, at + Vector2(-22, -10), Vector2(44, 10), Art.GRASS)
-	Art.block(self, at + Vector2(-16, -18), Vector2(32, 12), Art.GRASS)
-	Art.block(self, at + Vector2(-8, -24), Vector2(18, 8), Art.GRASS)
-	Art.block(self, at + Vector2(-12, -16), Vector2(6, 2), Art.GRASS_LIGHT)
-	Art.block(self, at + Vector2(0, -22), Vector2(6, 2), Art.GRASS_LIGHT)
+	Art.block(self, at + Vector2(-22, -6), Vector2(44, 6), Art.LOAM)
+	Art.block(self, at + Vector2(-12, -12), Vector2(20, 6), Art.CLAY)
+	Art.block(self, at + Vector2(-10, -12), Vector2(16, 2), Art.GRASS)
 
 func grass(at: Vector2, seed_value: int) -> void:
-	Art.steps(self, at + Vector2(-4, -6), at - Vector2(0, 2), Art.GRASS)
-	Art.steps(self, at + Vector2(4, -8), at - Vector2(0, 2), Art.GRASS)
+	Art.steps(self, at + Vector2(-4, -6), at - Vector2(0, 2), Art.CLAY)
+	Art.steps(self, at + Vector2(4, -8), at - Vector2(0, 2), Art.CLAY)
 	if seed_value % 3 == 0:
-		Art.block(self, at + Vector2(2, -14), Vector2(6, 6), Art.BRASS if seed_value % 2 else Art.ORANGE)
+		Art.block(self, at + Vector2(2, -14), Vector2(4, 6), Art.BRASS)
 		Art.block(self, at + Vector2(4, -12), Vector2(2, 2), Art.CREAM)
 
 func flag(at: Vector2, active: bool, number: String) -> void:

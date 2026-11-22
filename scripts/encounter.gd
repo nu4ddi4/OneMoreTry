@@ -1,6 +1,7 @@
 class_name TryEncounter
 extends Node2D
 
+const Art = preload("res://scripts/pixel_art.gd")
 const Elements = preload("res://scripts/elements.gd")
 const Surface = preload("res://scripts/surface.gd")
 const Device = preload("res://scripts/device.gd")
@@ -129,7 +130,7 @@ func lower_latch(key: String, p: TryPlayer) -> void:
 	flags[key] = true
 	flags[key + "_time"] = clock
 	game.sound.effect("click")
-	game.burst(p.position, Color("a77954"), 4)
+	game.burst(p.position, Art.CLAY, 4)
 
 func lower_exit() -> void:
 	var door: TrySurface = surfaces.exit
@@ -330,7 +331,7 @@ func _physics_process(delta: float) -> void:
 				flags.broken = true
 				surfaces.weak.impacted = true
 				game.sound.effect("crumble")
-				game.burst(p.position, Color("967557"), 14)
+				game.burst(p.position, Art.LOAM, 14)
 				game.shake = maxf(game.shake, 2.5)
 			collapse("weak", flags.get("broken", false))
 			gate("door", 368, false, 248, 168)
@@ -430,7 +431,7 @@ func _physics_process(delta: float) -> void:
 				auxiliary = clock
 				game.shake = 3
 				game.sound.effect("death")
-				game.burst(p.position + Vector2(0,-16), Color("f0d6ad"), 16)
+				game.burst(p.position + Vector2(0,-16), Art.CREAM, 16)
 				p.false_impact = 0.16
 			collapse("pit", auxiliary >= 0 and clock - auxiliary > 0.32)
 		39:
@@ -438,7 +439,7 @@ func _physics_process(delta: float) -> void:
 				flags.finish = true
 				auxiliary = clock
 				game.sound.effect("checkpoint")
-				game.burst(p.position + Vector2(0,-60), Color("f5d68a"), 24)
+				game.burst(p.position + Vector2(0,-60), Art.BRASS, 24)
 			collapse("pit", auxiliary >= 0 and clock - auxiliary > 0.2)
 		40:
 			var previous: TryEncounter = game.traps[38]
@@ -453,18 +454,25 @@ func _physics_process(delta: float) -> void:
 func _draw() -> void:
 	for rect in scenery:
 		Elements.hazard(self,rect,visual_kinds.get(rect,Elements.Kind.CRUSHER),1,false)
+	if id == 25:
+		Elements.cutter_socket(self, 484, 24, TryCourse.FLOOR)
+	elif id == 31:
+		Elements.cutter_socket(self, 402, 26, TryCourse.FLOOR)
 	for rect in hazards:
-		Elements.hazard(self,rect,visual_kinds[rect])
+		var kind: int = visual_kinds[rect]
+		if id == 25 or id == 31:
+			Elements.cutter(self, rect)
+		else:
+			Elements.hazard(self, rect, kind, 1, true, rect.position.x / 11.0)
 	for item in preparations:
 		Elements.hazard(self,item.rect,Elements.Kind.TEETH,item.amount,false)
 	if id == 35:
-		draw_rect(Rect2(410, 240, 6, 232), Color("48635d"))
-		draw_rect(Rect2(440, 240, 6, 232), Color("48635d"))
-		draw_rect(Rect2(410, 238, 36, 8), Color("48635d"))
+		draw_rect(Rect2(410, 240, 6, 232), Art.CLAY)
+		draw_rect(Rect2(440, 240, 6, 232), Art.CLAY)
+		draw_rect(Rect2(410, 238, 36, 8), Art.CLAY)
 		for at in [Vector2(413,244),Vector2(443,244),Vector2(413,466),Vector2(443,466)]:
-			draw_rect(Rect2(at-Vector2(1,1),Vector2(3,3)),Color("c7bf91"))
+			draw_rect(Rect2(at-Vector2(1,1),Vector2(3,3)),Art.BRASS)
 	if id == 10:
-		draw_rect(Rect2(272, 240, 48, 320), Color("4b6e67b8"))
+		draw_rect(Rect2(272, 240, 48, 320), Color(Art.SHADE, 0.72))
 	if id == 39:
-		draw_rect(Rect2(536,336,48,80), Color("456858"))
-		draw_rect(Rect2(542,342,36,74), Color("e8cb90"))
+		Elements.door(self, Rect2(536, 336, 48, 80))

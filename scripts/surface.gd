@@ -1,6 +1,7 @@
 class_name TrySurface
 extends AnimatableBody2D
 
+const Art = preload("res://scripts/pixel_art.gd")
 const Elements = preload("res://scripts/elements.gd")
 
 var dimensions := Vector2(64, 20)
@@ -8,6 +9,7 @@ var initial_position := Vector2.ZERO
 var initial_active := true
 var active := true
 var belt_speed := 0.0
+var belt_phase := 0.0
 var motion_step := Vector2.ZERO
 var previous_position := Vector2.ZERO
 var shape: CollisionShape2D
@@ -35,12 +37,15 @@ func _ready() -> void:
 	add_child(shape)
 	set_active(initial_active)
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if game and not game.interaction_enabled():
 		motion_step = Vector2.ZERO
 		return
 	motion_step = position - previous_position
 	previous_position = position
+	if belt_speed != 0:
+		belt_phase = fposmod(belt_phase + belt_speed * delta, 16)
+		queue_redraw()
 
 func set_element(kind: int) -> void:
 	var old_family := Elements.family(element_kind)
@@ -62,6 +67,7 @@ func reset() -> void:
 	previous_position = position
 	motion_step = Vector2.ZERO
 	fallen = 0
+	belt_phase = 0
 	impacted = false
 	if latches.x >= 0: latches = Vector2.ZERO
 	set_active(initial_active)
@@ -74,11 +80,17 @@ func _draw() -> void:
 		Elements.terrain(self,Rect2(0,0,dimensions.x,depth),false,global_position)
 		return
 	var r := Rect2(Vector2(0, fallen), dimensions)
-	Elements.surface(self,r,element_kind,belt_speed)
+	if camouflaged:
+		Elements.terrain(self, r, true, global_position)
+	else:
+		Elements.surface(self, r, element_kind, belt_speed, belt_phase)
 	if latches.x >= 0:
 		for n in 2:
-			var at := Vector2(13 - latches[n] * 10, 80 + n * 30)
-			draw_rect(Rect2(at, Vector2(16, 6)), Color("48635d"))
-			draw_rect(Rect2(at + Vector2(2, 1), Vector2(12, 2)), Color("d9bf93"))
+			var at := Art.snap(Vector2(13 - latches[n] * 10, 80 + n * 30))
+			draw_rect(Rect2(at, Vector2(16, 6)), Art.CLAY)
+			draw_rect(Rect2(at + Vector2(2, 1), Vector2(12, 2)), Art.BRASS)
 	if impacted:
-		draw_polyline(PackedVector2Array([Vector2(12, r.position.y + 2), Vector2(22, r.position.y + 8), Vector2(17, r.end.y), Vector2(36, r.position.y + 7), Vector2(48, r.end.y)]), Color("4c453d"), 2)
+		var crack := [Vector2(12, 2), Vector2(22, 8), Vector2(18, r.size.y - 2),
+			Vector2(36, 8), Vector2(48, r.size.y - 2)]
+		for i in range(crack.size() - 1):
+			Art.steps(self, r.position + crack[i], r.position + crack[i + 1], Art.INK)
