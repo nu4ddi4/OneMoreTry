@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=One More Try!
+Name[ko]=한 번만 더!
+Exec=onemoretry
+Icon=onemoretry
+Terminal=false
+Categories=Game;ArcadeGame;
