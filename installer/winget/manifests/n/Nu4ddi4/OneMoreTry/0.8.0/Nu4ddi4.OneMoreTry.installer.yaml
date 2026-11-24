@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: Nu4ddi4.OneMoreTry
+PackageVersion: 0.8.0
+InstallerType: inno
+Scope: user
+UpgradeBehavior: install
+AppsAndFeaturesEntries:
+  - DisplayName: One More Try!
+    Publisher: One More Try!
+    ProductCode: '{8B5C1547-21FA-47B4-B183-B0CF8AA2F502}_is1'
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/nu4ddi4/OneMoreTry/releases/download/v0.8.0/OneMoreTry-v0.8.0-Windows-x64-Setup.exe
+    InstallerSha256: 1F7BB2F981151FEE1B4C1F10F433070031E13058410C64381B92E11E1C00131E
+ManifestType: installer
+ManifestVersion: 1.10.0
