@@ -267,7 +267,6 @@ func route() -> void:
 			await go(314)
 			await jump(12)
 			await go(456)
-			if not fast_route: await wait_clock(2.8)
 		26:
 			await go(146, false)
 			await jump()
@@ -297,8 +296,7 @@ func route() -> void:
 				await tick()
 				if failed or (i > 5 and game.player.is_on_floor()): break
 			Input.action_release("jump")
-			if fast_route: await tick(16)
-			else: await wait_clock(1.9)
+			await go(368)
 			await go(380, false)
 			await jump(6)
 		32:
@@ -316,7 +314,10 @@ func route() -> void:
 			while not failed and game.traps[32].clock - game.traps[32].auxiliary < 0.8: await tick()
 		34:
 			await go(248)
-			await wait_clock(2.0)
+			var recess: TryEncounter = game.traps[33]
+			for frame in 200:
+				if failed or not recess.surfaces.exit.active: break
+				await tick()
 			await go(254)
 			await jump()
 		35:

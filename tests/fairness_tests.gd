@@ -13,6 +13,35 @@ func run() -> void:
 	game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
 	game.records.path = "user://fairness-test-records.json"
+	for number in [25, 31]:
+		await reset(number)
+		var encounter: TryEncounter = game.traps[number - 1]
+		var width := 24.0 if number == 25 else 26.0
+		await contact(number, 154 if number == 31 else 114)
+		await contact(number, 64)
+		await ticks(330)
+		check(encounter.clock > 2.6 and body_at(encounter, width, 112).has_area(), "Entry waiting leaves the braking wall raised in encounter %d" % number)
+		await contact(number, 456 if number == 25 else 370)
+		await ticks(4)
+		var moving_wall: Rect2 = encounter.hazards.front() if not encounter.hazards.is_empty() else Rect2()
+		check(moving_wall.size.y > 0 and moving_wall.size.y < 112 and is_equal_approx(moving_wall.end.y, TryCourse.FLOOR), "Braking retracts the visible hazard into the floor")
+		await ticks(20)
+		check(encounter.hazards.is_empty(), "Full retraction clears the passage")
+	await reset(34)
+	await go(34, 144)
+	await ticks(260)
+	var recess: TryEncounter = game.traps[33]
+	check(recess.auxiliary < 0 and recess.surfaces.exit.active, "Waiting outside the pressure plate leaves the chase ready and exit closed")
+	await contact(34, 248)
+	await ticks(16)
+	await contact(34, 200)
+	await contact(34, 248)
+	await ticks(16)
+	check(recess.surfaces.pit.active, "Two brief plate contacts do not accumulate")
+	await ticks(20)
+	check(not recess.surfaces.pit.active and recess.surfaces.exit.active, "Holding the plate opens the shelter before the exit")
+	await ticks(140)
+	check(game.run_deaths == 0 and not recess.surfaces.exit.active, "The blade passes above the shelter and releases the exit")
 	await reset(35)
 	await go(35,330)
 	var puzzle: TryEncounter = game.traps[34]

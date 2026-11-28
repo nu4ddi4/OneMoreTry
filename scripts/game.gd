@@ -329,8 +329,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			resume_game()
 		elif mode == Mode.RECORDS:
 			show_menu()
-	elif event.is_action_pressed("retry") and mode == Mode.PLAYING and player.alive:
-		player.die("retry")
+	elif event.is_action_pressed("retry") and mode == Mode.PLAYING:
+		if player.alive:
+			player.die("retry")
 		respawn_timer = 0.0
 	elif event.is_action_pressed("jump") and mode == Mode.MENU:
 		start_run()
